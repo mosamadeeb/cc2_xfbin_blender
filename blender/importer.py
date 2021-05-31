@@ -1,15 +1,16 @@
-import math
 import os
 
+import bmesh
 import bpy
-from bpy.props import StringProperty
-from bpy.types import Context, Operator
+from bmesh.types import BMesh
+from bpy.props import BoolProperty, StringProperty
+from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
-from mathutils import Euler, Matrix, Quaternion, Vector
+from mathutils import Matrix, Vector
 
-from ..xfbin_lib.xfbin.structure.br.br_nud import BrNud
 from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
                                               NuccChunkModel)
+from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
@@ -20,6 +21,10 @@ class ImportXFBIN(Operator, ImportHelper):
     bl_idname = "import_scene.xfbin"
     bl_label = "Import XFBIN"
 
+    use_full_material_names: BoolProperty(
+        name="Full material names",
+        description="Display full name of materials in NUD meshes, instead of a shortened form")
+
     filter_glob: StringProperty(default="*.xfbin", options={"HIDDEN"})
 
     def draw(self, context):
@@ -27,6 +32,8 @@ class ImportXFBIN(Operator, ImportHelper):
 
         layout.use_property_split = True
         layout.use_property_decorate = True
+
+        layout.prop(self, 'use_full_material_names')
 
     def execute(self, context):
         import time
@@ -50,6 +57,7 @@ class ImportXFBIN(Operator, ImportHelper):
 class XfbinImporter:
     def __init__(self, filepath, import_settings):
         self.filepath = filepath
+        self.use_full_material_names = import_settings.get("use_full_material_names")
 
     xfbin: Xfbin
     collection: bpy.types.Collection
@@ -137,7 +145,7 @@ class XfbinImporter:
             else:
                 parent_matrix = Matrix.Identity(4)
 
-            pos = pos_scale_to_blender(node.position)
+            pos = pos_cm_to_m(node.position)
             rot = rot_to_blender(node.rotation)
 
             print(f"bone {node.name}")
@@ -149,6 +157,8 @@ class XfbinImporter:
             this_bone_matrix = this_bone_matrix @ Matrix.Diagonal(Vector(node.scale).xyz).to_4x4()
             this_bone_matrix = parent_matrix @ (Matrix.Translation(Vector(pos).xyz) @ this_bone_matrix)
 
+            # Remove scale from matrix before inserting into the dictionary
+            # TODO: Should bones really have scale, or is it only used for setting up the skeleton? Needs in-game testing
             bone_matrices[node.name] = this_bone_matrix @ Matrix.Diagonal(Vector(node.scale).xyz).to_4x4().inverted()
 
             # # Take a page out of XNA Importer's book for bone tails - make roots just stick towards the camera
@@ -182,6 +192,7 @@ class XfbinImporter:
 
             bone = armature.edit_bones.new(node.name)
             bone.use_relative_parent = False
+            bone.inherit_scale = 'NONE'  # TODO: is this correct?
             bone.use_deform = True
 
             print(f"Matrix \n{this_bone_matrix}")
@@ -194,7 +205,7 @@ class XfbinImporter:
 
             bone.head = this_bone_matrix @ Vector((0, 0, 0))
 
-            # Having a tail would offset the meshes parented to the mesh bones, so we avoid that for now
+            # Having a long tail would offset the meshes parented to the mesh bones, so we avoid that for now
             bone.tail = this_bone_matrix @ Vector((0, 0, 0.0001))
 
             # if tail_delta.length < 0.00001:
@@ -216,6 +227,17 @@ class XfbinImporter:
         return armature_obj
 
     def make_objects(self, clump: NuccChunkClump, armature_obj, context):
+        vertex_group_list = [coord.node.name for coord in clump.coord_chunks]
+        vertex_group_indices = {
+            name: i
+            for i, name in enumerate(vertex_group_list)
+        }
+
+        # Small QoL fix for JoJo "_f" models to show shortened material names
+        clump_name = clump.name
+        if clump_name.endswith('_f'):
+            clump_name = clump_name[:-2]
+
         for nucc_model in clump.model_chunks:
             if not (isinstance(nucc_model, NuccChunkModel) and nucc_model.nud):
                 continue
@@ -223,26 +245,149 @@ class XfbinImporter:
             nud = nucc_model.nud
 
             for group in nud.mesh_groups:
-                for i in range(len(group.meshes)):
-                    mesh_name = f'{nucc_model.name} ({nucc_model.material_chunks[i].name})'
+                for i, mesh in enumerate(group.meshes):
+                    mat_name = nucc_model.material_chunks[i].name
+
+                    # Try to shorten the material name before adding it to the mesh name
+                    if (not self.use_full_material_names) and mat_name.startswith(clump_name):
+                        mat_name = mat_name[len(clump_name):].strip(' _')
+
+                    # Add the material name to the group name because we don't have a way
+                    # to differentiate between meshes in the same group
+                    mesh_name = f'{group.name} [{mat_name}]' if len(mat_name) else group.name
+
                     overall_mesh = bpy.data.meshes.new(mesh_name)
 
-                    overall_mesh.from_pydata(self.make_vertices(group.meshes[i].vertices), [], group.meshes[i].faces)
-                    overall_mesh.update(calc_edges=True)
+                    # This list will get filled in nud_mesh_to_bmesh
+                    custom_normals = list()
+                    new_bmesh = self.nud_mesh_to_bmesh(mesh, clump, vertex_group_indices, custom_normals)
+
+                    # Convert BMesh to blender Mesh
+                    new_bmesh.to_mesh(overall_mesh)
+                    new_bmesh.free()
+
+                    # Use the custom normals we made eariler
+                    overall_mesh.create_normals_split()
+                    overall_mesh.normals_split_custom_set_from_vertices(custom_normals)
+                    overall_mesh.auto_smooth_angle = 0
+                    overall_mesh.use_auto_smooth = True
 
                     mesh_obj: bpy.types.Object = bpy.data.objects.new(mesh_name, overall_mesh)
-                    mesh_obj.location = (0, 0, 0)
 
-                    # Set the mesh bone as the mesh's parent
+                    # Parent the mesh to the armature
+                    mesh_obj.parent = armature_obj
+
+                    # Set the mesh bone as the mesh's parent bone, if it exists (it should)
                     if armature_obj.data.edit_bones.get(group.name, None):
-                        mesh_obj.parent = armature_obj
                         mesh_obj.parent_bone = group.name
                         mesh_obj.parent_type = 'BONE'
 
+                    # Create the vertex groups (should change this to create *only* the needed groups)
+                    for name in [coord.node.name for coord in clump.coord_chunks]:
+                        mesh_obj.vertex_groups.new(name=name)
+
+                    # Apply the armature modifier
+                    modifier = mesh_obj.modifiers.new(type='ARMATURE', name="Armature")
+                    modifier.object = armature_obj
+
+                    # Link the mesh object to the collection
                     self.collection.objects.link(mesh_obj)
 
+        # for nucc_model in clump.model_chunks:
+        #     if not (isinstance(nucc_model, NuccChunkModel) and nucc_model.nud):
+        #         continue
+
+        #     nud = nucc_model.nud
+
+        #     for group in nud.mesh_groups:
+        #         for i in range(len(group.meshes)):
+        #             mesh_name = f'{nucc_model.name} ({nucc_model.material_chunks[i].name})'
+        #             overall_mesh = bpy.data.meshes.new(mesh_name)
+
+        #             overall_mesh.from_pydata(self.make_vertices(group.meshes[i].vertices), [], group.meshes[i].faces)
+        #             overall_mesh.update(calc_edges=True)
+
+        #             mesh_obj: bpy.types.Object = bpy.data.objects.new(mesh_name, overall_mesh)
+        #             mesh_obj.location = (0, 0, 0)
+
+        #             # Set the mesh bone as the mesh's parent
+        #             if armature_obj.data.edit_bones.get(group.name, None):
+        #                 mesh_obj.parent = armature_obj
+        #                 mesh_obj.parent_bone = group.name
+        #                 mesh_obj.parent_type = 'BONE'
+
+        #             self.collection.objects.link(mesh_obj)
+
+    def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, custom_normals) -> BMesh:
+        bm = bmesh.new()
+
+        deform = bm.verts.layers.deform.new("Vertex Weights")
+
+        # Vertices
+        for i in range(len(mesh.vertices)):
+            vtx = mesh.vertices[i]
+            vert = bm.verts.new(pos_scale_to_blender(vtx.position))
+
+            # Tangents cannot be applied
+            if vtx.normal:
+                normal = pos_to_blender(vtx.normal)
+                custom_normals.append(normal)
+                vert.normal = normal
+
+            if vtx.bone_weights:
+                for bone_id, bone_weight in zip(vtx.bone_ids, vtx.bone_weights):
+                    if bone_weight > 0:
+                        vertex_group_index = vertex_group_indices[clump.coord_chunks[bone_id].name]
+                        vert[deform][vertex_group_index] = bone_weight
+
+        # Set up the indexing table inside the bmesh so lookups work
+        bm.verts.ensure_lookup_table()
+        bm.verts.index_update()
+
+        # For each triangle, add it to the bmesh
+        for mesh_face in mesh.faces:
+            tri_idxs = mesh_face
+
+            # Skip "degenerate" triangles
+            if len(set(tri_idxs)) != 3:
+                continue
+
+            if -1 in tri_idxs:
+                print(f"Found a negative index inside a triangle_indices list! That shouldn't happen.")
+                continue
+
+            try:
+                face = bm.faces.new((bm.verts[tri_idxs[0]], bm.verts[tri_idxs[1]], bm.verts[tri_idxs[2]]))
+                face.smooth = True
+
+                # TODO: materials
+                #face.material_index = material_index
+            except Exception as e:
+                # We might get duplicate faces for some reason
+                # print(e)
+                pass
+
+        # Color
+        if len(mesh.vertices) and mesh.vertices[0].color:
+            col_layer = bm.loops.layers.color.new("Color")
+            for face in bm.faces:
+                for loop in face.loops:
+                    color = mesh.vertices[loop.vert.index].color
+                    loop[col_layer] = (color[0], color[1], color[2], color[3])
+
+        # # UVs
+        # if len(mesh.vertices) and mesh.vertices[0].uv:
+        #     for i, uv in enumerate(list(map(lambda x: x.uv, mesh.vertices))):
+        #         uv_layer = bm.loops.layers.uv.new(f"UV_Primary")
+        #         for face in bm.faces:
+        #             for loop in face.loops:
+        #                 original_uv = uv[0]
+        #                 loop[uv_layer].uv = (original_uv[0], 1.0 - original_uv[1])
+
+        return bm
+
     def make_vertices(self, mesh_vertices):
-        return list(map(lambda x: pos_to_blender(x.position), mesh_vertices))
+        return list(map(lambda x: pos_scale_to_blender(x.position), mesh_vertices))
 
 
 def menu_func_import(self, context):
