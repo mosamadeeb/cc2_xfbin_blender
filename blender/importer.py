@@ -9,7 +9,7 @@ from mathutils import Euler, Matrix, Quaternion, Vector
 
 from ..xfbin_lib.xfbin.structure.br.br_nud import BrNud
 from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
-                                               NuccChunkModel)
+                                              NuccChunkModel)
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
@@ -210,15 +210,17 @@ class XfbinImporter:
             for child in node.children:
                 make_bone(child)
 
-        make_bone(clump.root_node)
+        for root in clump.root_nodes:
+            make_bone(root)
 
         return armature_obj
 
     def make_objects(self, clump: NuccChunkClump, armature_obj, context):
         for nucc_model in clump.model_chunks:
-            nud = nucc_model.nud
-            if not nud:
+            if not (isinstance(nucc_model, NuccChunkModel) and nucc_model.nud):
                 continue
+
+            nud = nucc_model.nud
 
             for group in nud.mesh_groups:
                 for i in range(len(group.meshes)):
