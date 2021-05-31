@@ -148,9 +148,9 @@ class XfbinImporter:
             pos = pos_cm_to_m(node.position)
             rot = rot_to_blender(node.rotation)
 
-            print(f"bone {node.name}")
-            print(f"Actual Data\n{pos},    {rot},    {node.scale}")
-            print()
+            # print(f"bone {node.name}")
+            # print(f"Actual Data\n{pos},    {rot},    {node.scale}")
+            # print()
 
             this_bone_matrix = rot.to_matrix().to_4x4()
             this_bone_matrix.invert()
@@ -195,13 +195,13 @@ class XfbinImporter:
             bone.inherit_scale = 'NONE'  # TODO: is this correct?
             bone.use_deform = True
 
-            print(f"Matrix \n{this_bone_matrix}")
-            print()
-            print(
-                f"Matrix Decomposed \n{this_bone_matrix.to_translation()},    {this_bone_matrix.to_euler()},    {this_bone_matrix.to_scale()}")
-            print()
-            print()
-            print()
+            # print(f"Matrix \n{this_bone_matrix}")
+            # print()
+            # print(
+            #     f"Matrix Decomposed \n{this_bone_matrix.to_translation()},    {this_bone_matrix.to_euler()},    {this_bone_matrix.to_scale()}")
+            # print()
+            # print()
+            # print()
 
             bone.head = this_bone_matrix @ Vector((0, 0, 0))
 
@@ -375,14 +375,15 @@ class XfbinImporter:
                     color = mesh.vertices[loop.vert.index].color
                     loop[col_layer] = (color[0], color[1], color[2], color[3])
 
-        # # UVs
-        # if len(mesh.vertices) and mesh.vertices[0].uv:
-        #     for i, uv in enumerate(list(map(lambda x: x.uv, mesh.vertices))):
-        #         uv_layer = bm.loops.layers.uv.new(f"UV_Primary")
-        #         for face in bm.faces:
-        #             for loop in face.loops:
-        #                 original_uv = uv[0]
-        #                 loop[uv_layer].uv = (original_uv[0], 1.0 - original_uv[1])
+        # UVs
+        if len(mesh.vertices) and mesh.vertices[0].uv:
+            # We can have multiple UV channels - the first one will be set by default
+            for i in range(len(mesh.vertices[0].uv)):
+                uv_layer = bm.loops.layers.uv.new(f"UV_{i}")
+                for face in bm.faces:
+                    for loop in face.loops:
+                        original_uv = mesh.vertices[loop.vert.index].uv[i]
+                        loop[uv_layer].uv = (original_uv[0], 1.0 - original_uv[1])
 
         return bm
 
