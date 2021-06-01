@@ -295,9 +295,6 @@ class XfbinImporter:
 
         return bm
 
-    def make_vertices(self, mesh_vertices):
-        return list(map(lambda x: pos_scale_to_blender(x.position), mesh_vertices))
-
 
 def menu_func_import(self, context):
     self.layout.operator(ImportXFBIN.bl_idname, text='CyberConnect2 model container (.xfbin)')
