@@ -4,7 +4,7 @@ import bmesh
 import bpy
 from bmesh.types import BMesh
 from bpy.props import BoolProperty, StringProperty
-from bpy.types import Operator
+from bpy.types import Bone, Operator
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
@@ -118,14 +118,14 @@ class XfbinImporter:
 
             # parent_dir cross target_dir creates a vector that's guaranteed to be perpendicular to both of them.
             perp_dir = parent_dir.cross(target_dir).normalized()
-            print(f"{parent_dir} X {target_dir} = {perp_dir}")
+            #print(f"{parent_dir} X {target_dir} = {perp_dir}")
 
             # Then, parent_dir cross perp_dir will create a vector that is both
             #   1) perpendicular to parent_dir
             #   2) in the same sort of direction as target_dir
             # use this vector as our tail_delta
             tail_delta_dir = parent_dir.cross(perp_dir).normalized()
-            print(f"{parent_dir} X {perp_dir} = {tail_delta_dir}")
+            #print(f"{parent_dir} X {perp_dir} = {tail_delta_dir}")
 
             # Cross product can have bad symmetry - bones on opposite sides of the skeleton can get deltas that look weird
             # Fix this by picking the delta which moves the tail the farthest possible distance from the origin
@@ -224,6 +224,8 @@ class XfbinImporter:
         for root in clump.root_nodes:
             make_bone(root)
 
+        bpy.ops.object.mode_set(mode='OBJECT')
+
         return armature_obj
 
     def make_objects(self, clump: NuccChunkClump, armature_obj, context):
@@ -260,7 +262,8 @@ class XfbinImporter:
 
                     # This list will get filled in nud_mesh_to_bmesh
                     custom_normals = list()
-                    new_bmesh = self.nud_mesh_to_bmesh(mesh, clump, vertex_group_indices, custom_normals)
+                    used_bones = set()
+                    new_bmesh = self.nud_mesh_to_bmesh(mesh, clump, vertex_group_indices, used_bones, custom_normals)
 
                     # Convert BMesh to blender Mesh
                     new_bmesh.to_mesh(overall_mesh)
@@ -278,11 +281,19 @@ class XfbinImporter:
                     mesh_obj.parent = armature_obj
 
                     # Set the mesh bone as the mesh's parent bone, if it exists (it should)
-                    if armature_obj.data.edit_bones.get(group.name, None):
-                        mesh_obj.parent_bone = group.name
-                        mesh_obj.parent_type = 'BONE'
+                    mesh_bone: Bone = armature_obj.data.bones.get(group.name, None)
+                    if mesh_bone:
+                        if not used_bones:
+                            # Parent to bone ONLY if the mesh doesn't have any other bones weighted to it (teeth for example)
+                            mesh_obj.parent_bone = mesh_bone.name
+                            mesh_obj.parent_type = 'BONE'
+                        else:
+                            # If we're not going to parent it, transform the mesh by the bone's matrix
+                            #mesh_obj.matrix_basis = mesh_bone.matrix_local.to_4x4()
+                            mesh_obj.data.transform(mesh_bone.matrix_local.to_4x4())
+                            mesh_obj.matrix_world = Matrix()
 
-                    # Create the vertex groups (should change this to create *only* the needed groups)
+                    # Create the vertex groups for all bones (required)
                     for name in [coord.node.name for coord in clump.coord_chunks]:
                         mesh_obj.vertex_groups.new(name=name)
 
@@ -318,7 +329,7 @@ class XfbinImporter:
 
         #             self.collection.objects.link(mesh_obj)
 
-    def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, custom_normals) -> BMesh:
+    def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, used_bones, custom_normals) -> BMesh:
         bm = bmesh.new()
 
         deform = bm.verts.layers.deform.new("Vertex Weights")
@@ -337,6 +348,7 @@ class XfbinImporter:
             if vtx.bone_weights:
                 for bone_id, bone_weight in zip(vtx.bone_ids, vtx.bone_weights):
                     if bone_weight > 0:
+                        used_bones.add(clump.coord_chunks[bone_id].name)
                         vertex_group_index = vertex_group_indices[clump.coord_chunks[bone_id].name]
                         vert[deform][vertex_group_index] = bone_weight
 
