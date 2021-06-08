@@ -14,6 +14,7 @@ from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
+from .panels.nud_panel import NudPropertyGroup, NudPropertyPanel
 
 
 class ImportXFBIN(Operator, ImportHelper):
@@ -171,6 +172,9 @@ class XfbinImporter:
             empty = bpy.data.objects.new(nucc_model.name, None)
             empty.empty_display_size = 0
             empty.parent = armature_obj
+
+            # Set the NUD properties
+            empty.xfbin_nud_data.init_data(nucc_model)
 
             # This will be used to determine if a NUD contains skinned objects or not
             used_bones = set()
