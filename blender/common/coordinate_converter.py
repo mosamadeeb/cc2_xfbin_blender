@@ -13,7 +13,7 @@ def pos_to_blender(pos) -> Vector:
     return Vector((pos[0], pos[2], -pos[1]))
 
 
-def pos_scale_to_blender(pos) -> Vector:
+def pos_scaled_to_blender(pos) -> Vector:
     return pos_cm_to_m(pos_to_blender(pos))
 
 
@@ -30,8 +30,8 @@ def pos_from_blender(pos: Vector) -> Tuple[float, float, float]:
     return (pos.x, -pos.z, pos.y)
 
 
-def pos_scale_from_blender(pos: Vector) -> Tuple[float, float, float]:
-    return pos_from_blender(pos_m_to_cm(pos))
+def pos_scaled_from_blender(pos: Vector) -> Tuple[float, float, float]:
+    return pos_from_blender(Vector(pos_m_to_cm(pos)))
 
 
 def rot_from_blender(rot: Euler) -> Tuple[float, float, float]:

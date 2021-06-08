@@ -167,9 +167,28 @@ class XfbinImporter:
 
             nud = nucc_model.nud
 
+            # Create an empty to store the NUD's properties, and set the armature to be its parent
+            empty = bpy.data.objects.new(nucc_model.name, None)
+            empty.empty_display_size = 0
+            empty.parent = armature_obj
+
+            # This will be used to determine if a NUD contains skinned objects or not
+            used_bones = set()
+
+            # Link the empty to the collection
+            self.collection.objects.link(empty)
+
             for group in nud.mesh_groups:
                 for i, mesh in enumerate(group.meshes):
-                    mat_name = nucc_model.material_chunks[i].name
+                    mat_chunk = nucc_model.material_chunks[i]
+                    mat_name = mat_chunk.name
+
+                    # Check if the material chunk for this mesh has not been loaded before
+                    if xfbin_node_groups.get(mat_chunk) is None:
+                        xfbin_node_groups[mat_chunk] = self.make_xfbin_node_group(mat_chunk)
+
+                    # Make a NUD material for this mesh, using the XFBIN material
+                    nud_materials[mesh] = self.make_nud_material(mesh, xfbin_node_groups.get(mat_chunk))
 
                     # Try to shorten the material name before adding it to the mesh name
                     if (not self.use_full_material_names) and mat_name.startswith(clump_name):
@@ -181,12 +200,11 @@ class XfbinImporter:
 
                     overall_mesh = bpy.data.meshes.new(mesh_name)
 
-                    # This list will get filled in nud_mesh_to_bmesh
+                    # These lists will get filled in nud_mesh_to_bmesh
                     custom_normals = list()
-                    used_bones = set()
                     new_bmesh = self.nud_mesh_to_bmesh(mesh, clump, vertex_group_indices, used_bones, custom_normals)
 
-                    # Convert BMesh to blender Mesh
+                    # Convert the BMesh to a blender Mesh
                     new_bmesh.to_mesh(overall_mesh)
                     new_bmesh.free()
 
@@ -198,21 +216,8 @@ class XfbinImporter:
 
                     mesh_obj: bpy.types.Object = bpy.data.objects.new(mesh_name, overall_mesh)
 
-                    # Parent the mesh to the armature
-                    mesh_obj.parent = armature_obj
-
-                    # Set the mesh bone as the mesh's parent bone, if it exists (it should)
-                    mesh_bone: Bone = armature_obj.data.bones.get(group.name, None)
-                    if mesh_bone:
-                        if not used_bones:
-                            # Parent to bone ONLY if the mesh doesn't have any other bones weighted to it (teeth for example)
-                            mesh_obj.parent_bone = mesh_bone.name
-                            mesh_obj.parent_type = 'BONE'
-                        else:
-                            # If we're not going to parent it, transform the mesh by the bone's matrix
-                            #mesh_obj.matrix_basis = mesh_bone.matrix_local.to_4x4()
-                            mesh_obj.data.transform(mesh_bone.matrix_local.to_4x4())
-                            mesh_obj.matrix_world = Matrix()
+                    # Parent the mesh to the empty
+                    mesh_obj.parent = empty
 
                     # Create the vertex groups for all bones (required)
                     for name in [coord.node.name for coord in clump.coord_chunks]:
@@ -225,6 +230,18 @@ class XfbinImporter:
                     # Link the mesh object to the collection
                     self.collection.objects.link(mesh_obj)
 
+            # Set the mesh bone as the mesh's parent bone, if it exists (it should)
+            if nucc_model.coord_chunk:
+                mesh_bone: Bone = armature_obj.data.bones.get(nucc_model.coord_chunk.name, None)
+                if mesh_bone:
+                    if not used_bones:
+                        # Parent to bone ONLY if the mesh doesn't have any other bones weighted to it (teeth for example)
+                        empty.parent_bone = mesh_bone.name
+                        empty.parent_type = 'BONE'
+                    else:
+                        # If we're not going to parent it, transform the mesh by the bone's matrix
+                        empty.matrix_world = mesh_bone.matrix_local.to_4x4()
+
     def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, used_bones, custom_normals) -> BMesh:
         bm = bmesh.new()
 
@@ -233,7 +250,7 @@ class XfbinImporter:
         # Vertices
         for i in range(len(mesh.vertices)):
             vtx = mesh.vertices[i]
-            vert = bm.verts.new(pos_scale_to_blender(vtx.position))
+            vert = bm.verts.new(pos_scaled_to_blender(vtx.position))
 
             # Tangents cannot be applied
             if vtx.normal:
@@ -297,4 +314,4 @@ class XfbinImporter:
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportXFBIN.bl_idname, text='CyberConnect2 model container (.xfbin)')
+    self.layout.operator(ImportXFBIN.bl_idname, text='CyberConnect2 Model Container (.xfbin)')
