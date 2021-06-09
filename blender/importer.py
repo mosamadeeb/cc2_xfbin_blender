@@ -101,6 +101,9 @@ class XfbinImporter:
         armature_obj = bpy.data.objects.new(f"{armature_name}", armature)
         armature_obj.show_in_front = True
 
+        # Set the Xfbin clump properties
+        armature_obj.xfbin_clump_data.init_data(clump)
+
         self.collection.objects.link(armature_obj)
 
         context.view_layer.objects.active = armature_obj

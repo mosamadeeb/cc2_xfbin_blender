@@ -2,10 +2,20 @@ import bpy
 from bpy.props import PointerProperty
 
 from .importer import ImportXFBIN, menu_func_import
+from .panels.clump_panel import (AddXfbinMaterialOperator, ClumpPropertyGroup,
+                                 ClumpPropertyPanel,
+                                 DeleteXfbinMaterialOperator, IntPropertyGroup,
+                                 XfbinMaterialPropertyGroup)
 from .panels.nud_panel import NudPropertyGroup, NudPropertyPanel
 
 classes = (
     ImportXFBIN,
+    AddXfbinMaterialOperator,
+    DeleteXfbinMaterialOperator,
+    XfbinMaterialPropertyGroup,
+    IntPropertyGroup,
+    ClumpPropertyGroup,
+    ClumpPropertyPanel,
     NudPropertyGroup,
     NudPropertyPanel,
 )
@@ -19,12 +29,18 @@ def register():
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
     # Add Xfbin and Nud properties data
+    bpy.types.Object.xfbin_clump_data = PointerProperty(type=ClumpPropertyGroup)  # Applies to armatures only
     bpy.types.Object.xfbin_nud_data = PointerProperty(type=NudPropertyGroup)  # Applies to empties only
 
 
 def unregister():
+    del bpy.types.Object.xfbin_clump_data
     del bpy.types.Object.xfbin_nud_data
-    for c in classes:
+
+    for p in reversed(ClumpPropertyPanel.material_panels):
+        bpy.utils.unregister_class(p)
+
+    for c in reversed(classes):
         bpy.utils.unregister_class(c)
 
     # remove from the export / import menu
