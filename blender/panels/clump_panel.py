@@ -3,9 +3,10 @@ from itertools import chain
 import bpy
 from bpy.props import (CollectionProperty, FloatProperty, FloatVectorProperty,
                        IntProperty, IntVectorProperty, StringProperty)
-from bpy.types import Operator, Panel, PropertyGroup, UILayout
+from bpy.types import Operator, Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkClump, NuccChunkMaterial
+from .common import matrix_prop
 
 
 def register_material_panel():
@@ -22,14 +23,6 @@ def register_material_panel():
     bpy.utils.register_class(panel)
 
     ClumpPropertyPanel.material_panels.append(panel)
-
-
-def matrix_prop(ui_layout: UILayout, data, prop_name: str, length: int, text=''):
-    ui_layout.label(text=text)
-    box = ui_layout.box().grid_flow(row_major=True, columns=4, even_rows=True, even_columns=True)
-    for i in range(length//4):
-        for j in range(i*4, (i+1)*4):
-            box.prop(data, prop_name, index=j, text='')
 
 
 class XfbinMaterialPropertyGroup(PropertyGroup):
@@ -156,10 +149,6 @@ class XfbinMaterialPropertyPanel(Panel):
         matrix_prop(layout, material, 'texture_group_flags', 8, text='Texture Group Flags')
 
 
-class IntPropertyGroup(PropertyGroup):
-    value: IntProperty(description='Dummy property')
-
-
 class ClumpPropertyGroup(PropertyGroup):
     path: StringProperty(name='Chunk Path',
                          description='XFBIN chunk path that will be used for identifying the clump in the XFBIN.\n'
@@ -172,7 +161,7 @@ class ClumpPropertyGroup(PropertyGroup):
                                   description='Xfbin materials',
                                   )
 
-    active_panel_ids: CollectionProperty(type=IntPropertyGroup,
+    active_panel_ids: CollectionProperty(type=PropertyGroup,
                                          description='Each element is a panel id and its index is the index of the material in the materials collection',
                                          )
 

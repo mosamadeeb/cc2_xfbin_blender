@@ -4,7 +4,7 @@ from bpy.props import PointerProperty
 from .importer import ImportXFBIN, menu_func_import
 from .panels.clump_panel import (AddXfbinMaterialOperator, ClumpPropertyGroup,
                                  ClumpPropertyPanel,
-                                 DeleteXfbinMaterialOperator, IntPropertyGroup,
+                                 DeleteXfbinMaterialOperator,
                                  XfbinMaterialPropertyGroup)
 from .panels.nud_panel import NudPropertyGroup, NudPropertyPanel
 
@@ -13,7 +13,6 @@ classes = (
     AddXfbinMaterialOperator,
     DeleteXfbinMaterialOperator,
     XfbinMaterialPropertyGroup,
-    IntPropertyGroup,
     ClumpPropertyGroup,
     ClumpPropertyPanel,
     NudPropertyGroup,

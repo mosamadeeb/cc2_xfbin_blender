@@ -14,7 +14,6 @@ from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
-from .panels.nud_panel import NudPropertyGroup, NudPropertyPanel
 
 
 class ImportXFBIN(Operator, ImportHelper):
