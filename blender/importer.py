@@ -1,4 +1,5 @@
 import os
+from itertools import chain
 
 import bmesh
 import bpy
@@ -164,7 +165,10 @@ class XfbinImporter:
         if clump_name.endswith('_f'):
             clump_name = clump_name[:-2]
 
-        for nucc_model in clump.model_chunks:
+        all_model_chunks = list(dict.fromkeys(
+            chain(clump.model_chunks, *map(lambda x: x.model_chunks, clump.model_groups))))
+
+        for nucc_model in all_model_chunks:
             if not (isinstance(nucc_model, NuccChunkModel) and nucc_model.nud):
                 continue
 
