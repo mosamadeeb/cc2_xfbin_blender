@@ -1,17 +1,14 @@
 import bpy
-from bpy.props import EnumProperty, FloatVectorProperty, IntVectorProperty
-from bpy.types import PropertyGroup
+from bpy.props import EnumProperty, FloatVectorProperty, IntVectorProperty, PointerProperty, StringProperty
+from bpy.types import Bone, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkModel, RiggingFlag
 
 
 class NudPropertyGroup(PropertyGroup):
-    """
-    PropertyGroup holding all of the Yakuza data for an attribute set that can't be easily changed by the user
-    or stored in the Yakuza Shader node.
-    This includes a lot of data arrays, like unk12 or unk14, and also includes various flags that we can't work out
-    ourselves right now.
-    """
+    """Property group that contains attributes of a nuccChunkModel."""
+
+    mesh_bone: StringProperty(name='Mesh bone')
 
     rigging_flag: EnumProperty(name='Rigging flag',
                                items=[('1', 'Unskinned (0x01)', ''),
@@ -49,6 +46,10 @@ class NudPropertyGroup(PropertyGroup):
                                       )
 
     def init_data(self, model: NuccChunkModel):
+
+        # TODO: Change this to pointer property instead of string property
+        self.mesh_bone = model.coord_chunk.name if model.coord_chunk else 'None'
+
         # Set the rigging flag
         rigging_flag = set()
         if model.rigging_flag & RiggingFlag.UNSKINNED:
@@ -93,6 +94,8 @@ class NudPropertyPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.object
+
+        layout.prop(obj.xfbin_nud_data, 'mesh_bone')
 
         layout.label(text='Rigging flags')
         layout.prop(obj.xfbin_nud_data, 'rigging_flag')

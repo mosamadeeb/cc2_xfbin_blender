@@ -318,7 +318,7 @@ class XfbinImporter:
                 for face in bm.faces:
                     for loop in face.loops:
                         original_uv = mesh.vertices[loop.vert.index].uv[i]
-                        loop[uv_layer].uv = (original_uv[0], 1.0 - original_uv[1])
+                        loop[uv_layer].uv = uv_to_blender(original_uv)
 
         return bm
 

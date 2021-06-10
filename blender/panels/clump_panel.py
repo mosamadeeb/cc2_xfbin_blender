@@ -32,7 +32,10 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
                                   default='new_material',
                                   )
 
-    field02: IntProperty(name='Field02')
+    field02: IntProperty(name='Field02',
+                         min=0,
+                         max=255,
+                         )
     field04: FloatProperty(name='Field04')
 
     float_format: StringProperty(name='Float Format (Hex)',
