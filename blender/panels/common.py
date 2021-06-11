@@ -60,7 +60,6 @@ class XFBIN_LIST_OT_NewItem(Operator):
     def execute(self, context):
         prop = context.object.path_resolve(self.prop_path)
         collection = prop.path_resolve(self.collection)
-        index = prop.path_resolve(self.index)
 
         collection.add().update_name()
         return{'FINISHED'}
@@ -137,6 +136,8 @@ def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, ind
 
         if op == 'move_item':
             opr.direction = txt.upper()
+
+    layout.label(text='Selected Item:')
 
 
 common_classes = [

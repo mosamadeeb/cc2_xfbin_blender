@@ -3,30 +3,14 @@ from itertools import chain
 import bpy
 from bpy.props import (CollectionProperty, FloatProperty, FloatVectorProperty,
                        IntProperty, StringProperty)
-from bpy.types import Operator, Panel, PropertyGroup
+from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import (MaterialTextureGroup,
                                                NuccChunkClump,
                                                NuccChunkMaterial,
                                                NuccChunkTexture)
 from ..common.helpers import format_hex_str, hex_str_to_int, int_to_hex_str
-from .common import matrix_prop
-
-
-def register_material_panel():
-    """Creates a subclass of XfbinMaterialPropertyPanel with a new id and registers it."""
-
-    panel_idname = f'OBJECT_PT_xfbin_material_{ClumpPropertyPanel.panel_count}'
-    panel = type(panel_idname,
-                 (XfbinMaterialPropertyPanel, Panel, ),
-                 {'bl_idname': panel_idname,
-                  'panel_id': f'{ClumpPropertyPanel.panel_count}'},
-                 )
-
-    ClumpPropertyPanel.panel_count += 1
-    bpy.utils.register_class(panel)
-
-    ClumpPropertyPanel.material_panels.append(panel)
+from .common import draw_xfbin_list, matrix_prop
 
 
 class XfbinNutTexturePropertyGroup(PropertyGroup):
@@ -73,6 +57,8 @@ class XfbinTextureGroupPropertyGroup(PropertyGroup):
         type=XfbinNutTexturePropertyGroup,
     )
 
+    texture_index: IntProperty()
+
     def update_name(self):
         self.name = str(self.flag)
 
@@ -83,7 +69,6 @@ class XfbinTextureGroupPropertyGroup(PropertyGroup):
         for chunk in group.texture_chunks:
             t = self.textures.add()
             t.init_data(chunk)
-            t.name = chunk.name
 
 
 class XfbinMaterialPropertyGroup(PropertyGroup):
@@ -127,6 +112,8 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
         name='Texture Groups',
     )
 
+    texture_group_index: IntProperty()
+
     def update_name(self):
         self.name = self.material_name
 
@@ -144,105 +131,6 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
             g = self.texture_groups.add()
             g.init_data(group)
 
-        # self.texture_group_flags = list(map(lambda x: x.unk, material.texture_groups)) + \
-        #     ([0] * (8 - len(material.texture_groups)))
-
-
-class AddXfbinMaterialOperator(Operator):
-    bl_idname = 'xfbin.add_xfbin_material'
-    bl_label = 'Add New Material'
-
-    def execute(self, context):
-        materials = context.object.xfbin_clump_data.materials
-        active_panel_ids = context.object.xfbin_clump_data.active_panel_ids
-
-        new_mat = materials.add()
-        new_mat.name = new_mat.material_name
-        new_id = active_panel_ids.add()
-
-        if ClumpPropertyPanel.panel_count < len(materials):
-            register_material_panel()
-
-        new_id.name = f'{ClumpPropertyPanel.material_panels[len(materials) - 1].panel_id}'
-
-        return {'FINISHED'}
-
-
-class DeleteXfbinMaterialOperator(Operator):
-    bl_idname = 'xfbin.delete_xfbin_material'
-    bl_label = 'Remove'
-
-    panel_id: StringProperty(description='Contains the id of the panel that contains this operator')
-
-    def execute(self, context):
-        materials = context.object.xfbin_clump_data.materials
-        active_panel_ids = context.object.xfbin_clump_data.active_panel_ids
-
-        mat_index = active_panel_ids.find(self.panel_id)
-
-        active_panel_ids.remove(mat_index)
-        materials.remove(mat_index)
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_confirm(self, event)
-
-
-class XfbinMaterialPropertyPanel(Panel):
-    """Panel that displays the XfbinMaterialPropertyGroup in the ClumpPropertyGroup of the selected armature object."""
-
-    bl_idname = 'OBJECT_PT_xfbin_material'
-    bl_parent_id = 'OBJECT_PT_xfbin_clump'
-    bl_label = ''
-
-    bl_space_type = 'PROPERTIES'
-    bl_context = 'object'
-    bl_region_type = 'WINDOW'
-    bl_options = {'DEFAULT_CLOSED'}
-
-    panel_id: str
-
-    @classmethod
-    def poll(cls, context):
-        return context.object.xfbin_clump_data.active_panel_ids.find(cls.panel_id) != -1
-
-    def draw_header(self, context):
-        layout = self.layout
-        mat_index = context.object.xfbin_clump_data.active_panel_ids.find(self.panel_id)
-
-        if mat_index == -1:
-            return
-
-        material = context.object.xfbin_clump_data.materials[mat_index]
-
-        layout.label(text=f'Material {mat_index + 1}:  {material.material_name}')
-
-    def draw(self, context):
-        layout = self.layout
-        mat_index = context.object.xfbin_clump_data.active_panel_ids.find(self.panel_id)
-
-        if mat_index == -1:
-            return
-
-        # Get the material to be shown in this panel
-        material = context.object.xfbin_clump_data.materials[mat_index]
-
-        op = layout.operator(operator='xfbin.delete_xfbin_material', icon='X')
-        op.panel_id = self.panel_id
-
-        layout.prop(material, 'material_name')
-
-        row = layout.row()
-        row.prop(material, 'field02')
-        row.prop(material, 'field04')
-
-        layout.prop(material, 'float_format')
-        matrix_prop(layout, material, 'floats', NuccChunkMaterial.float_count(
-            hex_str_to_int(material.float_format)), text='Floats')
-
-        #matrix_prop(layout, material, 'texture_group_flags', 8, text='Texture Group Flags')
-
 
 class ClumpPropertyGroup(PropertyGroup):
     path: StringProperty(
@@ -258,10 +146,7 @@ class ClumpPropertyGroup(PropertyGroup):
         description='Xfbin materials',
     )
 
-    active_panel_ids: CollectionProperty(
-        type=PropertyGroup,
-        description='Each element is a panel id and its index is the index of the material in the materials collection',
-    )
+    material_index: IntProperty()
 
     def init_data(self, clump: NuccChunkClump):
         self.path = clump.filePath
@@ -269,20 +154,118 @@ class ClumpPropertyGroup(PropertyGroup):
         # Get all unique material chunks
         material_chunks = list(dict.fromkeys(chain(*map(lambda x: x.material_chunks, clump.model_chunks))))
 
-        self.active_panel_ids.clear()
-
-        # Register new material panels as required
-        for _ in range(len(material_chunks) - ClumpPropertyPanel.panel_count):
-            register_material_panel()
-
         # Create a property group for each material
-        for i, material in enumerate(material_chunks):
+        self.materials.clear()
+        for material in material_chunks:
             mat: XfbinMaterialPropertyGroup = self.materials.add()
             mat.init_data(material)
-            mat.name = mat.material_name
 
-            new_id = self.active_panel_ids.add()
-            new_id.name = f'{ClumpPropertyPanel.material_panels[i].panel_id}'
+
+class XfbinNutTexturePropertyPanel(Panel):
+    bl_idname = 'OBJECT_PT_xfbin_texture'
+    bl_parent_id = 'OBJECT_PT_xfbin_texture_group'
+    bl_label = 'Textures'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        data: ClumpPropertyGroup = context.object.xfbin_clump_data
+        mat: XfbinMaterialPropertyGroup = data.materials[data.material_index]
+        return mat.texture_groups and mat.texture_group_index >= 0
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: ClumpPropertyGroup = obj.xfbin_clump_data
+        mat: XfbinMaterialPropertyGroup = data.materials[data.material_index]
+        group: XfbinTextureGroupPropertyGroup = mat.texture_groups[mat.texture_group_index]
+
+        draw_xfbin_list(
+            layout,
+            group,
+            f'xfbin_clump_data.materials[{data.material_index}].texture_groups[{mat.texture_group_index}]',
+            'textures',
+            'texture_index'
+        )
+        texture_index = group.texture_index
+
+        if group.textures and texture_index >= 0:
+            texture: XfbinNutTexturePropertyGroup = group.textures[texture_index]
+            box = layout.box()
+
+            box.prop(texture, 'texture_name')
+            box.prop(texture, 'path')
+            box.prop_search(texture, 'texture', bpy.data, 'textures')
+
+
+class XfbinTextureGroupPropertyPanel(Panel):
+    bl_idname = 'OBJECT_PT_xfbin_texture_group'
+    bl_parent_id = 'OBJECT_PT_xfbin_material'
+    bl_label = 'Texture Groups'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        data: ClumpPropertyGroup = context.object.xfbin_clump_data
+        return data.materials and data.material_index >= 0
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: ClumpPropertyGroup = obj.xfbin_clump_data
+        mat: XfbinMaterialPropertyGroup = data.materials[data.material_index]
+
+        draw_xfbin_list(
+            layout, mat, f'xfbin_clump_data.materials[{data.material_index}]', 'texture_groups', 'texture_group_index')
+        texture_group_index = mat.texture_group_index
+
+        if mat.texture_groups and texture_group_index >= 0:
+            group: XfbinTextureGroupPropertyGroup = mat.texture_groups[texture_group_index]
+            box = layout.box()
+
+            box.prop(group, 'flag')
+
+
+class XfbinMaterialPropertyPanel(Panel):
+    """Panel that displays the XfbinMaterialPropertyGroup in the ClumpPropertyGroup of the selected armature object."""
+
+    bl_idname = 'OBJECT_PT_xfbin_material'
+    bl_parent_id = 'OBJECT_PT_xfbin_clump'
+    bl_label = 'XFBIN Materials'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: ClumpPropertyGroup = obj.xfbin_clump_data
+
+        draw_xfbin_list(layout, data, f'xfbin_clump_data', 'materials', 'material_index')
+        material_index = data.material_index
+
+        if data.materials and material_index >= 0:
+            material: XfbinMaterialPropertyGroup = data.materials[material_index]
+            box = layout.box()
+
+            box.prop(material, 'material_name')
+
+            row = box.row()
+            row.prop(material, 'field02')
+            row.prop(material, 'field04')
+
+            box.prop(material, 'float_format')
+            matrix_prop(box, material, 'floats', NuccChunkMaterial.float_count(
+                hex_str_to_int(material.float_format)), text='Floats')
 
 
 class ClumpPropertyPanel(Panel):
@@ -307,16 +290,15 @@ class ClumpPropertyPanel(Panel):
         layout = self.layout
 
         layout.prop(obj.xfbin_clump_data, 'path')
-        layout.label(text='XFBIN Materials:')
-        layout.operator(operator='xfbin.add_xfbin_material', icon='ADD')
 
 
 clump_classes = [
-    AddXfbinMaterialOperator,
-    DeleteXfbinMaterialOperator,
     XfbinNutTexturePropertyGroup,
     XfbinTextureGroupPropertyGroup,
     XfbinMaterialPropertyGroup,
     ClumpPropertyGroup,
     ClumpPropertyPanel,
+    XfbinMaterialPropertyPanel,
+    XfbinTextureGroupPropertyPanel,
+    XfbinNutTexturePropertyPanel,
 ]

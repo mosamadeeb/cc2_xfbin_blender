@@ -336,12 +336,13 @@ class NudMaterialPropPropertyPanel(Panel):
 
         if mat.material_props and prop_index >= 0:
             material_prop: NudMaterialPropPropertyGroup = mat.material_props[prop_index]
+            box = layout.box()
 
-            row = layout.row()
+            row = box.row()
             row.prop(material_prop, 'prop_name')
             row.prop(material_prop, 'count')
 
-            matrix_prop_group(layout, material_prop, 'values', material_prop.count, 'Values')
+            matrix_prop_group(box, material_prop, 'values', material_prop.count, 'Values')
 
 
 class NudMaterialTexturePropertyPanel(Panel):
@@ -370,22 +371,24 @@ class NudMaterialTexturePropertyPanel(Panel):
 
         if mat.textures and texture_index >= 0:
             texture: NudMaterialTexturePropertyGroup = mat.textures[texture_index]
-            layout.prop(texture, 'unk0')
-            layout.prop(texture, 'map_mode')
+            box = layout.box()
 
-            row = layout.row()
+            box.prop(texture, 'unk0')
+            box.prop(texture, 'map_mode')
+
+            row = box.row()
             row.prop(texture, 'wrap_mode_s')
             row.prop(texture, 'wrap_mode_t')
 
-            row = layout.row()
+            row = box.row()
             row.prop(texture, 'min_filter')
             row.prop(texture, 'mag_filter')
 
-            row = layout.row()
+            row = box.row()
             row.prop(texture, 'mip_detail')
             row.prop(texture, 'unk1')
 
-            layout.prop(texture, 'unk2')
+            box.prop(texture, 'unk2')
 
 
 class NudMaterialPropertyPanel(Panel):
@@ -396,7 +399,6 @@ class NudMaterialPropertyPanel(Panel):
     bl_space_type = 'PROPERTIES'
     bl_context = 'object'
     bl_region_type = 'WINDOW'
-    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -408,19 +410,21 @@ class NudMaterialPropertyPanel(Panel):
 
         if data.materials and mat_index >= 0:
             mat: NudMaterialPropertyGroup = data.materials[mat_index]
-            layout.prop(mat, 'material_id')
+            box = layout.box()
 
-            row = layout.row()
+            box.prop(mat, 'material_id')
+
+            row = box.row()
             row.prop(mat, 'source_factor')
             row.prop(mat, 'dest_factor')
 
-            row = layout.row()
+            row = box.row()
             row.prop(mat, 'alpha_test')
             row.prop(mat, 'alpha_function')
 
-            layout.prop(mat, 'ref_alpha')
-            layout.prop(mat, 'cull_mode')
-            layout.prop(mat, 'zbuffer_offset')
+            box.prop(mat, 'ref_alpha')
+            box.prop(mat, 'cull_mode')
+            box.prop(mat, 'zbuffer_offset')
 
 
 class NudMeshPropertyPanel(Panel):
