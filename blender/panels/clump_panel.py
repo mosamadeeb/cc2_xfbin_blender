@@ -162,20 +162,23 @@ class XfbinMaterialPropertyPanel(Panel):
 
 
 class ClumpPropertyGroup(PropertyGroup):
-    path: StringProperty(name='Chunk Path',
-                         description='XFBIN chunk path that will be used for identifying the clump in the XFBIN.\n'
-                         'Should be the same as the path of the clump in the XFBIN to inject to.\n'
-                         'Example: "c\\1nrt\max\\1nrtbod1.max"',
-                         )
+    path: StringProperty(
+        name='Chunk Path',
+        description='XFBIN chunk path that will be used for identifying the clump in the XFBIN.\n'
+        'Should be the same as the path of the clump in the XFBIN to inject to.\n'
+        'Example: "c\\1nrt\max\\1nrtbod1.max"',
+    )
 
-    materials: CollectionProperty(type=XfbinMaterialPropertyGroup,
-                                  name='Xfbin Materials',
-                                  description='Xfbin materials',
-                                  )
+    materials: CollectionProperty(
+        type=XfbinMaterialPropertyGroup,
+        name='Xfbin Materials',
+        description='Xfbin materials',
+    )
 
-    active_panel_ids: CollectionProperty(type=PropertyGroup,
-                                         description='Each element is a panel id and its index is the index of the material in the materials collection',
-                                         )
+    active_panel_ids: CollectionProperty(
+        type=PropertyGroup,
+        description='Each element is a panel id and its index is the index of the material in the materials collection',
+    )
 
     def init_data(self, clump: NuccChunkClump):
         self.path = clump.filePath

@@ -1,6 +1,7 @@
 import bpy
-from bpy.props import EnumProperty, FloatVectorProperty, IntVectorProperty, PointerProperty, StringProperty
-from bpy.types import Bone, Object, Panel, PropertyGroup
+from bpy.props import (EnumProperty, FloatVectorProperty, IntVectorProperty,
+                       StringProperty)
+from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkModel, RiggingFlag
 
@@ -9,12 +10,12 @@ class NudPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkModel."""
 
     mesh_bone: StringProperty(
-        name='Mesh bone',
+        name='Mesh Bone',
         description='The bone that this NUD is attached to'
     )
 
     rigging_flag: EnumProperty(
-        name='Rigging flag',
+        name='Rigging Flag',
         items=[('1', 'Unskinned (0x01)', ''),
                ('2', 'Skinned (0x02)', ''),
                ('4', 'Body (0x04)', ''), ],
@@ -29,7 +30,7 @@ class NudPropertyGroup(PropertyGroup):
     )
 
     rigging_flag_extra: EnumProperty(
-        name='Rigging flag (extra)',
+        name='Rigging Flag (Extra)',
         items=[('16', 'Blur (0x10)', ''),
                ('32', 'Shadow (0x20)', ''), ],
         description='Both are usually always on',
@@ -38,7 +39,7 @@ class NudPropertyGroup(PropertyGroup):
     )
 
     material_flags: IntVectorProperty(
-        name='Material flags',
+        name='Material Flags',
         description='Affects shading and transparency',
         size=4,
         min=0,
@@ -47,7 +48,7 @@ class NudPropertyGroup(PropertyGroup):
     )
 
     flag1_floats: FloatVectorProperty(
-        name='Extra material floats',
+        name='Material Floats',
         description='Only applies when the second flag (index 1) in the material flags contains 0x04',
         size=6,
     )

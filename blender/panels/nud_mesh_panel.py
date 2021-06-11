@@ -6,8 +6,7 @@ from bpy.types import Panel, PropertyGroup
 from ...xfbin_lib.xfbin.structure.nud import (NudMaterial, NudMaterialProperty,
                                               NudMaterialTexture, NudMesh)
 from ..common.helpers import int_to_hex_str, set_hex_string
-from .clump_panel import XfbinMaterialPropertyGroup
-from .common import FloatPropertyGroup, IntPropertyGroup
+from .common import FloatPropertyGroup
 
 
 class NudMaterialPropPropertyGroup(PropertyGroup):

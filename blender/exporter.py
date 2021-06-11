@@ -7,21 +7,20 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy.types import Armature, EditBone, Mesh, Object, Operator
 from bpy_extras.io_utils import ExportHelper
-from mathutils import Matrix, Quaternion, Vector
+from mathutils import Matrix, Vector
 
 from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
                                               NuccChunkCoord,
                                               NuccChunkMaterial,
                                               NuccChunkModel, RiggingFlag)
-from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMaterial, NudMesh,
-                                             NudMeshGroup, NudVertex)
+from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMesh, NudMeshGroup,
+                                             NudVertex)
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
+from .common.helpers import hex_str_to_int
 from .panels.clump_panel import XfbinMaterialPropertyGroup
-from .common.helpers import hex_str_to_int, int_to_hex_str
-from .panels.nud_mesh_panel import NudMeshPropertyGroup
 
 
 class ExportXfbin(Operator, ExportHelper):
