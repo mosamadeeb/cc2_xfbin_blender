@@ -6,6 +6,7 @@ from bpy.props import (CollectionProperty, FloatProperty, FloatVectorProperty,
 from bpy.types import Operator, Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkClump, NuccChunkMaterial
+from ..common.helpers import set_hex_string
 from .common import matrix_prop
 
 
@@ -28,19 +29,26 @@ def register_material_panel():
 class XfbinMaterialPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkMaterial."""
 
-    material_name: StringProperty(name='Material Name',
-                                  default='new_material',
-                                  )
+    def set_float_format(self, value):
+        set_hex_string(self, 'float_format', value, 1)
 
-    field02: IntProperty(name='Field02',
-                         min=0,
-                         max=255,
-                         )
+    material_name: StringProperty(
+        name='Material Name',
+        default='new_material',
+    )
+
+    field02: IntProperty(
+        name='Field02',
+        min=0,
+        max=255,
+    )
     field04: FloatProperty(name='Field04')
 
-    float_format: StringProperty(name='Float Format (Hex)',
-                                 default='00',
-                                 )
+    float_format: StringProperty(
+        name='Float Format (Hex)',
+        default='00',
+        set=set_float_format,
+    )
     floats: FloatVectorProperty(name='Floats', size=16)
 
     texture_group_flags: IntVectorProperty(name='Texture Group Flags', size=8)
@@ -66,7 +74,8 @@ class AddXfbinMaterialOperator(Operator):
         materials = context.object.xfbin_clump_data.materials
         active_panel_ids = context.object.xfbin_clump_data.active_panel_ids
 
-        materials.add()
+        new_mat = materials.add()
+        new_mat.name = new_mat.material_name
         new_id = active_panel_ids.add()
 
         if ClumpPropertyPanel.panel_count < len(materials):
@@ -184,6 +193,7 @@ class ClumpPropertyGroup(PropertyGroup):
         for i, material in enumerate(material_chunks):
             mat: XfbinMaterialPropertyGroup = self.materials.add()
             mat.init_data(material)
+            mat.name = mat.material_name
 
             new_id = self.active_panel_ids.add()
             new_id.name = f'{ClumpPropertyPanel.material_panels[i].panel_id}'
@@ -213,3 +223,12 @@ class ClumpPropertyPanel(Panel):
         layout.prop(obj.xfbin_clump_data, 'path')
         layout.label(text='XFBIN Materials:')
         layout.operator(operator='xfbin.add_xfbin_material', icon='ADD')
+
+
+clump_classes = [
+    AddXfbinMaterialOperator,
+    DeleteXfbinMaterialOperator,
+    XfbinMaterialPropertyGroup,
+    ClumpPropertyGroup,
+    ClumpPropertyPanel,
+]

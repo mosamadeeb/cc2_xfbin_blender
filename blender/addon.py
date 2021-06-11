@@ -3,23 +3,21 @@ from bpy.props import PointerProperty
 
 from .exporter import ExportXfbin, menu_func_export
 from .importer import ImportXFBIN, menu_func_import
-from .panels.clump_panel import (AddXfbinMaterialOperator, ClumpPropertyGroup,
-                                 ClumpPropertyPanel,
-                                 DeleteXfbinMaterialOperator,
-                                 XfbinMaterialPropertyGroup)
-from .panels.nud_panel import NudPropertyGroup, NudPropertyPanel
+from .panels.clump_panel import (ClumpPropertyGroup, ClumpPropertyPanel,
+                                 clump_classes)
+from .panels.common import common_classes
+from .panels.nud_mesh_panel import NudMeshPropertyGroup, nud_mesh_classes
+from .panels.nud_panel import NudPropertyGroup, nud_classes
 
-classes = (
+classes = [
     ImportXFBIN,
     ExportXfbin,
-    AddXfbinMaterialOperator,
-    DeleteXfbinMaterialOperator,
-    XfbinMaterialPropertyGroup,
-    ClumpPropertyGroup,
-    ClumpPropertyPanel,
-    NudPropertyGroup,
-    NudPropertyPanel,
-)
+]
+
+classes.extend(common_classes)
+classes.extend(clump_classes)
+classes.extend(nud_classes)
+classes.extend(nud_mesh_classes)
 
 
 def register():
@@ -33,11 +31,13 @@ def register():
     # Add Xfbin and Nud properties data
     bpy.types.Object.xfbin_clump_data = PointerProperty(type=ClumpPropertyGroup)  # Applies to armatures only
     bpy.types.Object.xfbin_nud_data = PointerProperty(type=NudPropertyGroup)  # Applies to empties only
+    bpy.types.Object.xfbin_mesh_data = PointerProperty(type=NudMeshPropertyGroup)  # Applies to meshes only
 
 
 def unregister():
     del bpy.types.Object.xfbin_clump_data
     del bpy.types.Object.xfbin_nud_data
+    del bpy.types.Object.xfbin_mesh_data
 
     for p in reversed(ClumpPropertyPanel.material_panels):
         bpy.utils.unregister_class(p)

@@ -52,8 +52,8 @@ class NudPropertyGroup(PropertyGroup):
         size=6,
     )
 
-    def init_data(self, model: NuccChunkModel, mesh_bone: Bone):
-        self.mesh_bone = mesh_bone.name
+    def init_data(self, model: NuccChunkModel, mesh_bone: str):
+        self.mesh_bone = mesh_bone
 
         # Set the rigging flag
         rigging_flag = set()
@@ -111,3 +111,9 @@ class NudPropertyPanel(Panel):
 
         if obj.xfbin_nud_data.material_flags[1] & 0x04:
             layout.prop(obj.xfbin_nud_data, 'flag1_floats')
+
+
+nud_classes = [
+    NudPropertyGroup,
+    NudPropertyPanel,
+]

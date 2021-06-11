@@ -20,6 +20,8 @@ from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
 from .panels.clump_panel import XfbinMaterialPropertyGroup
+from .common.helpers import hex_str_to_int, int_to_hex_str
+from .panels.nud_mesh_panel import NudMeshPropertyGroup
 
 
 class ExportXfbin(Operator, ExportHelper):
@@ -384,7 +386,7 @@ class XfbinExporter:
         chunk.field02 = property_group.field02
         chunk.field04 = property_group.field04
 
-        chunk.format = int(property_group.float_format, base=16)
+        chunk.format = hex_str_to_int(property_group.float_format)
         chunk.floats = list(property_group.floats)[:NuccChunkMaterial.float_count(chunk.format)]
 
         # TODO: Add texture groups
