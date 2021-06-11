@@ -6,15 +6,22 @@ from bpy.types import Panel, PropertyGroup
 from ...xfbin_lib.xfbin.structure.nud import (NudMaterial, NudMaterialProperty,
                                               NudMaterialTexture, NudMesh)
 from ..common.helpers import format_hex_str, int_to_hex_str
-from .common import FloatPropertyGroup, draw_xfbin_list
+from .clump_panel import ClumpPropertyGroup
+from .common import FloatPropertyGroup, draw_xfbin_list, matrix_prop_group
 
 
 class NudMaterialPropPropertyGroup(PropertyGroup):
     def update_prop_name(self, context):
         self.update_name()
 
+    def update_count(self, context):
+        extra = self.count - len(self.values)
+        if extra > 0:
+            for _ in range(extra):
+                self.values.add()
+
     prop_name: StringProperty(
-        name='Property name',
+        name='Name',
         default='NU_useStColor',  # This usually has no values, so it's safe to have it as the default name
         update=update_prop_name,
     )
@@ -23,6 +30,7 @@ class NudMaterialPropPropertyGroup(PropertyGroup):
         name='Value count',
         min=0,
         max=0xFF,
+        update=update_count,
     )
 
     values: CollectionProperty(
@@ -44,14 +52,10 @@ class NudMaterialPropPropertyGroup(PropertyGroup):
 
 
 class NudMaterialTexturePropertyGroup(PropertyGroup):
-    def update_unk0(self, context):
-        self.update_name()
-
     unk0: IntProperty(
         name='Unk 0',
         min=-0x80_00_00_00,
         max=0x7F_FF_FF_FF,
-        update=update_unk0,
     )
 
     map_mode: IntProperty(
@@ -103,7 +107,7 @@ class NudMaterialTexturePropertyGroup(PropertyGroup):
     )
 
     def update_name(self):
-        self.name = str(self.unk0)
+        pass
 
     def init_data(self, texture: NudMaterialTexture):
         self.unk0 = texture.unk0
@@ -183,9 +187,13 @@ class NudMaterialPropertyGroup(PropertyGroup):
         type=NudMaterialTexturePropertyGroup
     )
 
+    texture_index: IntProperty()
+
     material_props: CollectionProperty(
         type=NudMaterialPropPropertyGroup
     )
+
+    material_prop_index: IntProperty()
 
     def update_name(self):
         self.name = self.material_id
@@ -216,6 +224,22 @@ class NudMaterialPropertyGroup(PropertyGroup):
 
 class NudMeshPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkModel."""
+
+    def update_xfbin_material(self, context):
+        # if not (context.object and context.object.parent and context.object.parent.parent):
+        #     return
+
+        xfbin_mat = context.object.parent.parent.xfbin_clump_data.materials.get(self.xfbin_material)
+
+        if not (xfbin_mat and xfbin_mat.texture_groups):
+            return
+
+        # TODO: Check if we should access other groups as well
+        group = xfbin_mat.texture_groups[0]
+
+        for mat in self.materials:
+            for xt, mt in zip(group.textures, mat.textures):
+                mt.name = xt.name
 
     vertex_type: EnumProperty(
         name='Vertex Format',
@@ -259,13 +283,14 @@ class NudMeshPropertyGroup(PropertyGroup):
 
     xfbin_material: StringProperty(
         name='XFBIN Material',
-        description='The XFBIN material that this mesh uses'
+        description='The XFBIN material that this mesh uses',
+        update=update_xfbin_material,
     )
 
     materials: CollectionProperty(
         type=NudMaterialPropertyGroup,
         name='Materials',
-        description='Materials used by this NUD mesh'
+        description='Materials used by this NUD mesh',
     )
 
     material_index: IntProperty()
@@ -275,25 +300,138 @@ class NudMeshPropertyGroup(PropertyGroup):
         self.bone_type = str(int(mesh.bone_type))
         self.uv_type = str(int(mesh.uv_type))
 
-        self.xfbin_material = xfbin_mat_name
-
         self.materials.clear()
         for material in mesh.materials:
             m = self.materials.add()
             m.init_data(material)
 
-        self.material_index = 0
+        # Set the material name after all nud materials have been added to properly update the texture names
+        self.xfbin_material = xfbin_mat_name
+
+
+class NudMaterialPropPropertyPanel(Panel):
+    bl_idname = 'OBJECT_PT_nud_material_props'
+    bl_label = 'Material Properties'
+    bl_parent_id = 'OBJECT_PT_nud_material'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        data: NudMeshPropertyGroup = context.object.xfbin_mesh_data
+        return data.materials and data.material_index >= 0
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: NudMeshPropertyGroup = obj.xfbin_mesh_data
+        mat: NudMaterialPropertyGroup = data.materials[data.material_index]
+
+        draw_xfbin_list(
+            layout, mat, f'xfbin_mesh_data.materials[{data.material_index}]', 'material_props', 'material_prop_index')
+        prop_index = mat.material_prop_index
+
+        if mat.material_props and prop_index >= 0:
+            material_prop: NudMaterialPropPropertyGroup = mat.material_props[prop_index]
+
+            row = layout.row()
+            row.prop(material_prop, 'prop_name')
+            row.prop(material_prop, 'count')
+
+            matrix_prop_group(layout, material_prop, 'values', material_prop.count, 'Values')
+
+
+class NudMaterialTexturePropertyPanel(Panel):
+    bl_idname = 'OBJECT_PT_nud_material_texture'
+    bl_label = 'Textures'
+    bl_parent_id = 'OBJECT_PT_nud_material'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        data: NudMeshPropertyGroup = context.object.xfbin_mesh_data
+        return data.materials and data.material_index >= 0
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: NudMeshPropertyGroup = obj.xfbin_mesh_data
+        mat: NudMaterialPropertyGroup = data.materials[data.material_index]
+
+        draw_xfbin_list(layout, mat, f'xfbin_mesh_data.materials[{data.material_index}]', 'textures', 'texture_index')
+        texture_index = mat.texture_index
+
+        if mat.textures and texture_index >= 0:
+            texture: NudMaterialTexturePropertyGroup = mat.textures[texture_index]
+            layout.prop(texture, 'unk0')
+            layout.prop(texture, 'map_mode')
+
+            row = layout.row()
+            row.prop(texture, 'wrap_mode_s')
+            row.prop(texture, 'wrap_mode_t')
+
+            row = layout.row()
+            row.prop(texture, 'min_filter')
+            row.prop(texture, 'mag_filter')
+
+            row = layout.row()
+            row.prop(texture, 'mip_detail')
+            row.prop(texture, 'unk1')
+
+            layout.prop(texture, 'unk2')
+
+
+class NudMaterialPropertyPanel(Panel):
+    bl_idname = 'OBJECT_PT_nud_material'
+    bl_label = 'NUD Materials'
+    bl_parent_id = 'OBJECT_PT_nud_mesh'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: NudMeshPropertyGroup = obj.xfbin_mesh_data
+
+        draw_xfbin_list(layout, data, 'xfbin_mesh_data', 'materials', 'material_index')
+        mat_index = data.material_index
+
+        if data.materials and mat_index >= 0:
+            mat: NudMaterialPropertyGroup = data.materials[mat_index]
+            layout.prop(mat, 'material_id')
+
+            row = layout.row()
+            row.prop(mat, 'source_factor')
+            row.prop(mat, 'dest_factor')
+
+            row = layout.row()
+            row.prop(mat, 'alpha_test')
+            row.prop(mat, 'alpha_function')
+
+            layout.prop(mat, 'ref_alpha')
+            layout.prop(mat, 'cull_mode')
+            layout.prop(mat, 'zbuffer_offset')
 
 
 class NudMeshPropertyPanel(Panel):
     """Panel that displays the NudMeshPropertyGroup attached to the selected mesh object."""
 
     bl_idname = 'OBJECT_PT_nud_mesh'
-    bl_label = "[XFBIN] Mesh Properties"
+    bl_label = '[XFBIN] Mesh Properties'
 
-    bl_space_type = "PROPERTIES"
-    bl_context = "object"
-    bl_region_type = "WINDOW"
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
 
     @classmethod
     def poll(cls, context):
@@ -306,17 +444,13 @@ class NudMeshPropertyPanel(Panel):
         layout = self.layout
         obj = context.object
         data: NudMeshPropertyGroup = obj.xfbin_mesh_data
+        clump_data: ClumpPropertyGroup = obj.parent.parent.xfbin_clump_data
 
         layout.prop(data, 'vertex_type')
         layout.prop(data, 'bone_type')
         layout.prop(data, 'uv_type')
 
-        layout.prop_search(data, 'xfbin_material', obj.parent.parent.xfbin_clump_data, 'materials')
-
-        index = draw_xfbin_list(layout, data, 'xfbin_mesh_data', 'materials', 'material_index')
-
-        if index is not None:
-            layout.prop(data.materials[index], 'material_id')
+        layout.prop_search(data, 'xfbin_material', clump_data, 'materials')
 
 
 nud_mesh_classes = [
@@ -325,4 +459,7 @@ nud_mesh_classes = [
     NudMaterialPropertyGroup,
     NudMeshPropertyGroup,
     NudMeshPropertyPanel,
+    NudMaterialPropertyPanel,
+    NudMaterialTexturePropertyPanel,
+    NudMaterialPropPropertyPanel,
 ]

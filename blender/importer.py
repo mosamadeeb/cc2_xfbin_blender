@@ -226,11 +226,17 @@ class XfbinImporter:
 
                     mesh_obj: bpy.types.Object = bpy.data.objects.new(mesh_name, overall_mesh)
 
-                    # Set the NUD mesh properties
-                    mesh_obj.xfbin_mesh_data.init_data(mesh, mat_chunk.name)
+                    # Link the mesh object to the collection
+                    self.collection.objects.link(mesh_obj)
 
                     # Parent the mesh to the empty
                     mesh_obj.parent = empty
+
+                    # Set the mesh as the active object to properly initialize its PropertyGroup
+                    context.view_layer.objects.active = mesh_obj
+
+                    # Set the NUD mesh properties
+                    mesh_obj.xfbin_mesh_data.init_data(mesh, mat_chunk.name)
 
                     # Create the vertex groups for all bones (required)
                     for name in [coord.node.name for coord in clump.coord_chunks]:
@@ -239,9 +245,6 @@ class XfbinImporter:
                     # Apply the armature modifier
                     modifier = mesh_obj.modifiers.new(type='ARMATURE', name="Armature")
                     modifier.object = armature_obj
-
-                    # Link the mesh object to the collection
-                    self.collection.objects.link(mesh_obj)
 
             # Set the mesh bone as the mesh's parent bone, if it exists (it should)
             if nucc_model.coord_chunk:

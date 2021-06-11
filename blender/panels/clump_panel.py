@@ -2,11 +2,14 @@ from itertools import chain
 
 import bpy
 from bpy.props import (CollectionProperty, FloatProperty, FloatVectorProperty,
-                       IntProperty, IntVectorProperty, StringProperty)
+                       IntProperty, StringProperty)
 from bpy.types import Operator, Panel, PropertyGroup
 
-from ...xfbin_lib.xfbin.structure.nucc import NuccChunkClump, NuccChunkMaterial
-from ..common.helpers import format_hex_str, int_to_hex_str
+from ...xfbin_lib.xfbin.structure.nucc import (MaterialTextureGroup,
+                                               NuccChunkClump,
+                                               NuccChunkMaterial,
+                                               NuccChunkTexture)
+from ..common.helpers import format_hex_str, hex_str_to_int, int_to_hex_str
 from .common import matrix_prop
 
 
@@ -26,6 +29,63 @@ def register_material_panel():
     ClumpPropertyPanel.material_panels.append(panel)
 
 
+class XfbinNutTexturePropertyGroup(PropertyGroup):
+    def update_texture_name(self, context):
+        self.update_name()
+
+    texture_name: StringProperty(
+        name='Texture Name',
+        default='new_texture',
+        update=update_texture_name,
+    )
+
+    path: StringProperty(
+        name='Chunk Path',
+        description='XFBIN chunk path that will be used for identifying the texture in the XFBIN.\n'
+        'Should be the same as the path of the texture in the XFBIN to inject to.\n'
+        'Example: "c/1nrt/tex/1nrtbody.nut"',
+    )
+
+    texture: StringProperty(
+        name='Image Texture',
+    )
+
+    def update_name(self):
+        self.name = self.texture_name
+
+    def init_data(self, chunk: NuccChunkTexture):
+        self.texture_name = chunk.name
+        self.path = chunk.filePath
+        self.texture = chunk.name
+
+
+class XfbinTextureGroupPropertyGroup(PropertyGroup):
+    def update_flag(self, context):
+        self.update_name()
+
+    flag: IntProperty(
+        name='Flag',
+        subtype='UNSIGNED',
+        update=update_flag,
+    )
+
+    textures: CollectionProperty(
+        type=XfbinNutTexturePropertyGroup,
+    )
+
+    def update_name(self):
+        self.name = str(self.flag)
+
+    def init_data(self, group: MaterialTextureGroup):
+        self.flag = group.unk
+
+        self.textures.clear()
+        for chunk in group.texture_chunks:
+            t = self.textures.add()
+            t.init_data(chunk)
+            t.name = chunk.name
+
+
 class XfbinMaterialPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkMaterial."""
 
@@ -39,9 +99,13 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
         else:
             self.float_format = '00'
 
+    def update_material_name(self, context):
+        self.update_name()
+
     material_name: StringProperty(
         name='Material Name',
         default='new_material',
+        update=update_material_name,
     )
 
     field02: IntProperty(
@@ -58,7 +122,13 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
     )
     floats: FloatVectorProperty(name='Floats', size=16)
 
-    texture_group_flags: IntVectorProperty(name='Texture Group Flags', size=8)
+    texture_groups: CollectionProperty(
+        type=XfbinTextureGroupPropertyGroup,
+        name='Texture Groups',
+    )
+
+    def update_name(self):
+        self.name = self.material_name
 
     def init_data(self, material: NuccChunkMaterial):
         self.material_name = material.name
@@ -69,8 +139,13 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
         self.float_format = int_to_hex_str(material.format, 1)
         self.floats = material.floats + ((0.0,) * (16 - len(material.floats)))
 
-        self.texture_group_flags = list(map(lambda x: x.unk, material.texture_groups)) + \
-            ([0] * (8 - len(material.texture_groups)))
+        self.texture_groups.clear()
+        for group in material.texture_groups:
+            g = self.texture_groups.add()
+            g.init_data(group)
+
+        # self.texture_group_flags = list(map(lambda x: x.unk, material.texture_groups)) + \
+        #     ([0] * (8 - len(material.texture_groups)))
 
 
 class AddXfbinMaterialOperator(Operator):
@@ -163,9 +238,10 @@ class XfbinMaterialPropertyPanel(Panel):
         row.prop(material, 'field04')
 
         layout.prop(material, 'float_format')
-        matrix_prop(layout, material, 'floats', 16, text='Floats')
+        matrix_prop(layout, material, 'floats', NuccChunkMaterial.float_count(
+            hex_str_to_int(material.float_format)), text='Floats')
 
-        matrix_prop(layout, material, 'texture_group_flags', 8, text='Texture Group Flags')
+        #matrix_prop(layout, material, 'texture_group_flags', 8, text='Texture Group Flags')
 
 
 class ClumpPropertyGroup(PropertyGroup):
@@ -238,6 +314,8 @@ class ClumpPropertyPanel(Panel):
 clump_classes = [
     AddXfbinMaterialOperator,
     DeleteXfbinMaterialOperator,
+    XfbinNutTexturePropertyGroup,
+    XfbinTextureGroupPropertyGroup,
     XfbinMaterialPropertyGroup,
     ClumpPropertyGroup,
     ClumpPropertyPanel,

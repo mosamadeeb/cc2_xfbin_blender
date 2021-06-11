@@ -1,7 +1,5 @@
 import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
-from bpy.types import CollectionProperty as CollectionPropertyType
-from bpy.types import IntProperty as IntPropertyType
 from bpy.types import Operator, PropertyGroup, UILayout, UIList
 
 
@@ -14,6 +12,18 @@ def matrix_prop(ui_layout: UILayout, data, prop_name: str, length: int, text='')
 
     for i in range((length // 4) * 4, (length // 4) * 4 + (length % 4)):
         box.prop(data, prop_name, index=i, text='')
+
+
+def matrix_prop_group(ui_layout: UILayout, data, prop_name: str, length: int, text=''):
+    collection = data.path_resolve(prop_name)
+    ui_layout.label(text=text)
+    box = ui_layout.box().grid_flow(row_major=True, columns=4, even_rows=True, even_columns=True)
+    for i in range(length//4):
+        for j in range(i*4, (i+1)*4):
+            box.prop(collection[j], 'value', text='')
+
+    for i in range((length // 4) * 4, (length // 4) * 4 + (length % 4)):
+        box.prop(collection[i], 'value', text='')
 
 
 class IntPropertyGroup(PropertyGroup):
@@ -112,13 +122,8 @@ class XFBIN_LIST_OT_MoveItem(Operator):
         return{'FINISHED'}
 
 
-def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, index_name: str) -> int:
-    """Draws a list using the layout and populates it with the given collection and index.
-    Returns the index of the currently selected item, if it exists.
-    """
-
-    collection: CollectionPropertyType = data.get(collection_name)
-    index: IntPropertyType = data.get(index_name)
+def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, index_name: str):
+    """Draws a list using the layout and populates it with the given collection and index."""
 
     row = layout.row()
     row.template_list('XFBIN_LIST_UL_List', 'xfbin_list', data, collection_name, data, index_name)
@@ -132,11 +137,6 @@ def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, ind
 
         if op == 'move_item':
             opr.direction = txt.upper()
-
-    if collection and index >= 0:
-        return index
-
-    return None
 
 
 common_classes = [
