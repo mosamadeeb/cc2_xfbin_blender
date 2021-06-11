@@ -1,6 +1,6 @@
 import bpy
 from bpy.props import EnumProperty, FloatVectorProperty, IntVectorProperty, PointerProperty, StringProperty
-from bpy.types import Bone, PropertyGroup
+from bpy.types import Bone, Object, Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkModel, RiggingFlag
 
@@ -8,47 +8,52 @@ from ...xfbin_lib.xfbin.structure.nucc import NuccChunkModel, RiggingFlag
 class NudPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkModel."""
 
-    mesh_bone: StringProperty(name='Mesh bone')
+    mesh_bone: StringProperty(
+        name='Mesh bone',
+        description='The bone that this NUD is attached to'
+    )
 
-    rigging_flag: EnumProperty(name='Rigging flag',
-                               items=[('1', 'Unskinned (0x01)', ''),
-                                      ('2', 'Skinned (0x02)', ''),
-                                      ('4', 'Body (0x04)', ''), ],
-                               description='Affects the NUD\'s rigging. Unskinned and Skinned should not be enabled at the same time. Examples:\n'
-                               'Eyes (Storm): Unskinned (0x01)\n'
-                               'Eyes (JoJo): Skinned (0x02)\n'
-                               'Teeth (Storm): Unskinned & Body (0x05)\n'
-                               'Teeth (JoJo): Unskinned (0x01)\n'
-                               'Body and tongue: Skinned & Body (0x06)\n',
-                               options={'ENUM_FLAG'},
-                               default={'2', '4'},
-                               )
+    rigging_flag: EnumProperty(
+        name='Rigging flag',
+        items=[('1', 'Unskinned (0x01)', ''),
+               ('2', 'Skinned (0x02)', ''),
+               ('4', 'Body (0x04)', ''), ],
+        description='Affects the NUD\'s rigging. Unskinned and Skinned should not be enabled at the same time. Examples:\n'
+        'Eyes (Storm): Unskinned (0x01)\n'
+        'Eyes (JoJo): Skinned (0x02)\n'
+        'Teeth (Storm): Unskinned & Body (0x05)\n'
+        'Teeth (JoJo): Unskinned (0x01)\n'
+        'Body and tongue: Skinned & Body (0x06)\n',
+        options={'ENUM_FLAG'},
+        default={'2', '4'},
+    )
 
-    rigging_flag_extra: EnumProperty(name='Rigging flag (extra)',
-                                     items=[('16', 'Blur (0x10)', ''),
-                                            ('32', 'Shadow (0x20)', ''), ],
-                                     description='Both are usually always on',
-                                     options={'ENUM_FLAG'},
-                                     default={'16', '32'},
-                                     )
+    rigging_flag_extra: EnumProperty(
+        name='Rigging flag (extra)',
+        items=[('16', 'Blur (0x10)', ''),
+               ('32', 'Shadow (0x20)', ''), ],
+        description='Both are usually always on',
+        options={'ENUM_FLAG'},
+        default={'16', '32'},
+    )
 
-    material_flags: IntVectorProperty(name='Material flags',
-                                      description='Affects shading and transparency',
-                                      size=4,
-                                      min=0,
-                                      max=255,
-                                      default=(0, 0, 8, 3),
-                                      )
+    material_flags: IntVectorProperty(
+        name='Material flags',
+        description='Affects shading and transparency',
+        size=4,
+        min=0,
+        max=255,
+        default=(0, 0, 8, 3),
+    )
 
-    flag1_floats: FloatVectorProperty(name='Extra material floats',
-                                      description='Only applies when the second flag (index 1) in the material flags contains 0x04',
-                                      size=6,
-                                      )
+    flag1_floats: FloatVectorProperty(
+        name='Extra material floats',
+        description='Only applies when the second flag (index 1) in the material flags contains 0x04',
+        size=6,
+    )
 
-    def init_data(self, model: NuccChunkModel):
-
-        # TODO: Change this to pointer property instead of string property
-        self.mesh_bone = model.coord_chunk.name if model.coord_chunk else 'None'
+    def init_data(self, model: NuccChunkModel, mesh_bone: Bone):
+        self.mesh_bone = mesh_bone.name
 
         # Set the rigging flag
         rigging_flag = set()
@@ -77,7 +82,7 @@ class NudPropertyGroup(PropertyGroup):
         self.flag1_floats = model.flag1_floats if model.flag1_floats else [0] * 6
 
 
-class NudPropertyPanel(bpy.types.Panel):
+class NudPropertyPanel(Panel):
     """Panel that displays the NudPropertyGroup attached to the selected empty object."""
 
     bl_idname = 'OBJECT_PT_nud'
@@ -89,13 +94,14 @@ class NudPropertyPanel(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object and context.object.type == 'EMPTY'
+        obj = context.object
+        return obj and obj.type == 'EMPTY' and obj.parent and obj.parent.type == 'ARMATURE'
 
     def draw(self, context):
         layout = self.layout
         obj = context.object
 
-        layout.prop(obj.xfbin_nud_data, 'mesh_bone')
+        layout.prop_search(obj.xfbin_nud_data, 'mesh_bone', obj.parent.data, 'bones')
 
         layout.label(text='Rigging flags')
         layout.prop(obj.xfbin_nud_data, 'rigging_flag')
@@ -103,4 +109,5 @@ class NudPropertyPanel(bpy.types.Panel):
 
         layout.prop(obj.xfbin_nud_data, 'material_flags')
 
-        layout.prop(obj.xfbin_nud_data, 'flag1_floats')
+        if obj.xfbin_nud_data.material_flags[1] & 0x04:
+            layout.prop(obj.xfbin_nud_data, 'flag1_floats')

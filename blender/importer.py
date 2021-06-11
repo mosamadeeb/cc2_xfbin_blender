@@ -179,9 +179,6 @@ class XfbinImporter:
             empty.empty_display_size = 0
             empty.parent = armature_obj
 
-            # Set the NUD properties
-            empty.xfbin_nud_data.init_data(nucc_model)
-
             # This will be used to determine if a NUD contains skinned objects or not
             used_bones = set()
 
@@ -241,6 +238,7 @@ class XfbinImporter:
                     self.collection.objects.link(mesh_obj)
 
             # Set the mesh bone as the mesh's parent bone, if it exists (it should)
+            mesh_bone = None
             if nucc_model.coord_chunk:
                 mesh_bone: Bone = armature_obj.data.bones.get(nucc_model.coord_chunk.name, None)
                 if mesh_bone:
@@ -251,6 +249,9 @@ class XfbinImporter:
                     else:
                         # If we're not going to parent it, transform the mesh by the bone's matrix
                         empty.matrix_world = mesh_bone.matrix_local.to_4x4()
+
+            # Set the NUD properties, after getting the mesh bone
+            empty.xfbin_nud_data.init_data(nucc_model, mesh_bone)
 
     def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, used_bones, custom_normals) -> BMesh:
         bm = bmesh.new()
