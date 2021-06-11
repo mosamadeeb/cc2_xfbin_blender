@@ -6,7 +6,7 @@ from bpy.props import (CollectionProperty, FloatProperty, FloatVectorProperty,
 from bpy.types import Operator, Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkClump, NuccChunkMaterial
-from ..common.helpers import set_hex_string
+from ..common.helpers import format_hex_str, int_to_hex_str
 from .common import matrix_prop
 
 
@@ -29,8 +29,15 @@ def register_material_panel():
 class XfbinMaterialPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkMaterial."""
 
-    def set_float_format(self, value):
-        set_hex_string(self, 'float_format', value, 1)
+    def update_float_format(self, context):
+        old_val = self.float_format
+        new_val = format_hex_str(self.float_format, 1)
+
+        if new_val and len(new_val) < 3:
+            if old_val != new_val:
+                self.float_format = new_val
+        else:
+            self.float_format = '00'
 
     material_name: StringProperty(
         name='Material Name',
@@ -47,7 +54,7 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
     float_format: StringProperty(
         name='Float Format (Hex)',
         default='00',
-        set=set_float_format,
+        update=update_float_format,
     )
     floats: FloatVectorProperty(name='Floats', size=16)
 
@@ -59,7 +66,7 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
         self.field02 = material.field02
         self.field04 = material.field04
 
-        self.float_format = f'{material.format:02X}'
+        self.float_format = int_to_hex_str(material.format, 1)
         self.floats = material.floats + ((0.0,) * (16 - len(material.floats)))
 
         self.texture_group_flags = list(map(lambda x: x.unk, material.texture_groups)) + \

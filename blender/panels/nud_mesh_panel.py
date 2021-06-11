@@ -5,7 +5,7 @@ from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nud import (NudMaterial, NudMaterialProperty,
                                               NudMaterialTexture, NudMesh)
-from ..common.helpers import int_to_hex_str, set_hex_string
+from ..common.helpers import format_hex_str, int_to_hex_str
 from .common import FloatPropertyGroup
 
 
@@ -104,13 +104,20 @@ class NudMaterialTexturePropertyGroup(PropertyGroup):
 
 
 class NudMaterialPropertyGroup(PropertyGroup):
-    def set_material(self, value):
-        set_hex_string(self, 'material', value, 4)
+    def update_material(self, context):
+        old_val = self.material_id
+        new_val = format_hex_str(self.material_id, 4)
+
+        if new_val and len(new_val) < 12:
+            if old_val != new_val:
+                self.material_id = new_val
+        else:
+            self.material_id = '00 00 00 00'
 
     material_id: StringProperty(
         name='Material ID (Hex)',
-        default='F0 0A',  # Just a generic material ID from Storm 4
-        set=set_material,
+        default='00 00 F0 0A',  # Just a generic material ID from Storm 4
+        update=update_material,
     )
 
     source_factor: IntProperty(

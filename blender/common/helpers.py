@@ -8,10 +8,10 @@ def int_to_hex_str(val: int, size: int) -> str:
     return ' '.join([str_val[i: i + 2] for i in range(0, len(str_val), 2)])
 
 
-def set_hex_string(data, attr: str, value: str, size: int):
+def format_hex_str(value: str, size: int):
     try:
         val = hex_str_to_int(value)
     except:
         pass
     else:
-        data[attr] = int_to_hex_str(val, size)
+        return int_to_hex_str(val, size)
