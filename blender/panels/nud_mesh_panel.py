@@ -6,13 +6,17 @@ from bpy.types import Panel, PropertyGroup
 from ...xfbin_lib.xfbin.structure.nud import (NudMaterial, NudMaterialProperty,
                                               NudMaterialTexture, NudMesh)
 from ..common.helpers import format_hex_str, int_to_hex_str
-from .common import FloatPropertyGroup
+from .common import FloatPropertyGroup, draw_xfbin_list
 
 
 class NudMaterialPropPropertyGroup(PropertyGroup):
+    def update_prop_name(self, context):
+        self.update_name()
+
     prop_name: StringProperty(
         name='Property name',
         default='NU_useStColor',  # This usually has no values, so it's safe to have it as the default name
+        update=update_prop_name,
     )
 
     count: IntProperty(
@@ -26,6 +30,9 @@ class NudMaterialPropPropertyGroup(PropertyGroup):
         name='Values',
     )
 
+    def update_name(self):
+        self.name = self.prop_name
+
     def init_data(self, material_prop: NudMaterialProperty):
         self.prop_name = material_prop.name
         self.count = len(material_prop.values)
@@ -37,34 +44,38 @@ class NudMaterialPropPropertyGroup(PropertyGroup):
 
 
 class NudMaterialTexturePropertyGroup(PropertyGroup):
+    def update_unk0(self, context):
+        self.update_name()
+
     unk0: IntProperty(
         name='Unk 0',
         min=-0x80_00_00_00,
-        max=0x7F_FF_FF_FF
+        max=0x7F_FF_FF_FF,
+        update=update_unk0,
     )
 
     map_mode: IntProperty(
         name='Map mode',
         min=0,
-        max=0xFF_FF
+        max=0xFF_FF,
     )
 
     wrap_mode_s: IntProperty(
         name='Wrap mode S',
         min=0,
-        max=0xFF
+        max=0xFF,
     )
 
     wrap_mode_t: IntProperty(
         name='Wrap mode T',
         min=0,
-        max=0xFF
+        max=0xFF,
     )
 
     min_filter: IntProperty(
         name='Min filter',
         min=0,
-        max=0xFF
+        max=0xFF,
     )
 
     mag_filter: IntProperty(
@@ -76,20 +87,23 @@ class NudMaterialTexturePropertyGroup(PropertyGroup):
     mip_detail: IntProperty(
         name='Mip detail',
         min=0,
-        max=0xFF
+        max=0xFF,
     )
 
     unk1: IntProperty(
         name='Unk 1',
         min=0,
-        max=0xFF
+        max=0xFF,
     )
 
     unk2: IntProperty(
         name='Unk 2',
         min=-0x80_00,
-        max=0x7F_FF
+        max=0x7F_FF,
     )
+
+    def update_name(self):
+        self.name = str(self.unk0)
 
     def init_data(self, texture: NudMaterialTexture):
         self.unk0 = texture.unk0
@@ -104,7 +118,7 @@ class NudMaterialTexturePropertyGroup(PropertyGroup):
 
 
 class NudMaterialPropertyGroup(PropertyGroup):
-    def update_material(self, context):
+    def update_material_id(self, context):
         old_val = self.material_id
         new_val = format_hex_str(self.material_id, 4)
 
@@ -114,10 +128,12 @@ class NudMaterialPropertyGroup(PropertyGroup):
         else:
             self.material_id = '00 00 00 00'
 
+        self.update_name()
+
     material_id: StringProperty(
         name='Material ID (Hex)',
         default='00 00 F0 0A',  # Just a generic material ID from Storm 4
-        update=update_material,
+        update=update_material_id,
     )
 
     source_factor: IntProperty(
@@ -170,6 +186,9 @@ class NudMaterialPropertyGroup(PropertyGroup):
     material_props: CollectionProperty(
         type=NudMaterialPropPropertyGroup
     )
+
+    def update_name(self):
+        self.name = self.material_id
 
     def init_data(self, material: NudMaterial):
         self.material_id = int_to_hex_str(material.flags, 4)
@@ -249,6 +268,8 @@ class NudMeshPropertyGroup(PropertyGroup):
         description='Materials used by this NUD mesh'
     )
 
+    material_index: IntProperty()
+
     def init_data(self, mesh: NudMesh, xfbin_mat_name: str):
         self.vertex_type = str(int(mesh.vertex_type))
         self.bone_type = str(int(mesh.bone_type))
@@ -260,6 +281,8 @@ class NudMeshPropertyGroup(PropertyGroup):
         for material in mesh.materials:
             m = self.materials.add()
             m.init_data(material)
+
+        self.material_index = 0
 
 
 class NudMeshPropertyPanel(Panel):
@@ -289,6 +312,11 @@ class NudMeshPropertyPanel(Panel):
         layout.prop(data, 'uv_type')
 
         layout.prop_search(data, 'xfbin_material', obj.parent.parent.xfbin_clump_data, 'materials')
+
+        index = draw_xfbin_list(layout, data, 'xfbin_mesh_data', 'materials', 'material_index')
+
+        if index is not None:
+            layout.prop(data.materials[index], 'material_id')
 
 
 nud_mesh_classes = [
