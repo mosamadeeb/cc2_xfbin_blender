@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import FloatProperty, IntProperty, StringProperty
+from bpy.props import FloatProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Operator, PropertyGroup, UILayout, UIList
 
 
@@ -32,6 +32,31 @@ class IntPropertyGroup(PropertyGroup):
 
 class FloatPropertyGroup(PropertyGroup):
     value: FloatProperty()
+
+
+class EmptyPropertyGroup(PropertyGroup):
+    def update_empty(self, context):
+        if self.empty:
+            self.value = self.empty.name
+        
+    def update_value(self, context):
+        self.update_name()
+
+    def poll_empty(self, object):
+        return object.type == 'EMPTY' and object.parent and object.parent.type == 'ARMATURE'
+
+    empty: PointerProperty(
+        type=bpy.types.Object,
+        update=update_empty,
+        poll=poll_empty,
+    )
+
+    value: StringProperty(
+        update=update_value,
+    )
+
+    def update_name(self):
+        self.name = self.value
 
 
 # UIList code adapted from here https://sinestesia.co/blog/tutorials/using-uilists-in-blender/
@@ -143,6 +168,7 @@ def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, ind
 common_classes = [
     IntPropertyGroup,
     FloatPropertyGroup,
+    EmptyPropertyGroup,
     XFBIN_LIST_UL_List,
     XFBIN_LIST_OT_NewItem,
     XFBIN_LIST_OT_DeleteItem,

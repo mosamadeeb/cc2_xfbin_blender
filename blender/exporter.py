@@ -11,7 +11,8 @@ from mathutils import Matrix, Vector
 
 from ..xfbin_lib.xfbin.structure.br.br_nud import (NudBoneType, NudUvType,
                                                    NudVertexType)
-from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, MaterialTextureGroup,
+from ..xfbin_lib.xfbin.structure.nucc import (ClumpModelGroup, CoordNode,
+                                              MaterialTextureGroup,
                                               NuccChunkClump, NuccChunkCoord,
                                               NuccChunkMaterial,
                                               NuccChunkModel, NuccChunkTexture,
@@ -25,7 +26,9 @@ from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
 from .common.helpers import hex_str_to_int
-from .panels.clump_panel import (XfbinMaterialPropertyGroup,
+from .panels.clump_panel import (ClumpModelGroupPropertyGroup,
+                                 ClumpPropertyGroup,
+                                 XfbinMaterialPropertyGroup,
                                  XfbinNutTexturePropertyGroup,
                                  XfbinTextureGroupPropertyGroup)
 from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
@@ -164,8 +167,19 @@ class XfbinExporter:
         armature: Armature = armature_obj.data
         empties: List[Mesh] = [obj for obj in armature_obj.children if obj.type == 'EMPTY']
 
-        clump = NuccChunkClump(armature_obj.xfbin_clump_data.path, armature.name)
+        clump_data: ClumpPropertyGroup = armature_obj.xfbin_clump_data
+
+        clump = NuccChunkClump(clump_data.path, armature.name)
         old_clump = None
+
+        # Get the clump data properties
+        clump.field00 = clump_data.field00
+
+        clump.coord_flag0 = clump_data.coord_flag0
+        clump.coord_flag1 = clump_data.coord_flag1
+
+        clump.model_flag0 = clump_data.model_flag0
+        clump.model_flag1 = clump_data.model_flag1
 
         if self.inject_to_xfbin:
             # Try to get the clump in the existing xfbin
@@ -173,7 +187,7 @@ class XfbinExporter:
 
             if old_clump:
                 # There should be only 1 clump per page anyway
-                old_clump = old_clump[1].get_chunks_by_type(NuccChunkClump)[0]
+                old_clump: NuccChunkClump = old_clump[1].get_chunks_by_type(NuccChunkClump)[0]
 
         if self.export_bones:
             clump.coord_chunks = self.make_coords(armature, clump, context)
@@ -185,14 +199,29 @@ class XfbinExporter:
         if self.export_meshes:
             # Create the material chunks
             xfbin_mats = dict()
-            for mat in armature_obj.xfbin_clump_data.materials:
+            for mat in clump_data.materials:
                 xfbin_mats[mat.material_name] = self.make_xfbin_material(mat, clump, context)
 
             # Create the model chunks
-            clump.model_chunks = self.make_models(empties, clump, old_clump, xfbin_mats, context)
+            model_chunks = self.make_models(empties, clump, old_clump, xfbin_mats, context)
 
-            # TODO: Add support for adding new model groups (from xfbin_clump_data)
-            clump.model_groups = [list(clump.model_chunks)]
+            # Set the model chunks and model groups based on the clump data
+            clump_models = list(map(lambda x: x.value, clump_data.models))
+            clump.model_chunks = [c for c in model_chunks if c.name in clump_models]
+
+            # Add the model groups from the clump data
+            clump.model_groups = list()
+            for group in clump_data.models:
+                group: ClumpModelGroupPropertyGroup
+                group_models = list(map(lambda x: x.value, group.models))
+                g = ClumpModelGroup()
+
+                g.flag0 = group.flag0
+                g.flag1 = group.flag1
+                g.unk = hex_str_to_int(group.unk)
+                g.model_chunks = [c for c in model_chunks if c.name in group_models]
+
+                clump.model_groups.append(g)
         elif old_clump:
             clump.model_chunks = old_clump.model_chunks
             clump.model_groups = old_clump.model_groups

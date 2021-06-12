@@ -3,14 +3,15 @@ from itertools import chain
 import bpy
 from bpy.props import (CollectionProperty, FloatProperty, FloatVectorProperty,
                        IntProperty, StringProperty)
-from bpy.types import Panel, PropertyGroup
+from bpy.types import Object, Panel, PropertyGroup
 
-from ...xfbin_lib.xfbin.structure.nucc import (MaterialTextureGroup,
+from ...xfbin_lib.xfbin.structure.nucc import (ClumpModelGroup,
+                                               MaterialTextureGroup,
                                                NuccChunkClump,
                                                NuccChunkMaterial,
                                                NuccChunkTexture)
 from ..common.helpers import format_hex_str, hex_str_to_int, int_to_hex_str
-from .common import draw_xfbin_list, matrix_prop
+from .common import EmptyPropertyGroup, draw_xfbin_list, matrix_prop
 
 
 class XfbinNutTexturePropertyGroup(PropertyGroup):
@@ -133,6 +134,55 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
             g.init_data(group)
 
 
+class ClumpModelGroupPropertyGroup(PropertyGroup):
+    def update_unk(self, context):
+        old_val = self.unk
+        new_val = format_hex_str(self.unk, 4)
+
+        if new_val and len(new_val) < 12:
+            if old_val != new_val:
+                self.unk = new_val
+        else:
+            self.unk = '00 00 00 00'
+
+    flag0: IntProperty(
+        name='Flag 1',
+        min=0,
+        max=255,
+    )
+
+    flag1: IntProperty(
+        name='Flag 2',
+        min=0,
+        max=255,
+    )
+
+    unk: StringProperty(
+        name='Unk',
+        update=update_unk,
+    )
+
+    models: CollectionProperty(
+        type=EmptyPropertyGroup,
+    )
+
+    model_index: IntProperty()
+
+    def update_name(self):
+        self.name = 'Group'
+
+    def init_data(self, group: ClumpModelGroup):
+        self.flag0 = group.flag0
+        self.flag1 = group.flag1
+        self.unk = int_to_hex_str(group.unk, 4)
+
+        # Add models
+        self.models.clear()
+        for model in group.model_chunks:
+            m: EmptyPropertyGroup = self.models.add()
+            m.value = model.name if model else 'None'
+
+
 class ClumpPropertyGroup(PropertyGroup):
     path: StringProperty(
         name='Chunk Path',
@@ -140,6 +190,46 @@ class ClumpPropertyGroup(PropertyGroup):
         'Should be the same as the path of the clump in the XFBIN to inject to.\n'
         'Example: "c\\1nrt\max\\1nrtbod1.max"',
     )
+
+    field00: IntProperty(
+        name='Clump Unk',
+    )
+
+    coord_flag0: IntProperty(
+        name='Coord Flag 1',
+        min=0,
+        max=255,
+    )
+
+    coord_flag1: IntProperty(
+        name='Coord Flag 2',
+        min=0,
+        max=255,
+    )
+
+    model_flag0: IntProperty(
+        name='Model Flag 1',
+        min=0,
+        max=255,
+    )
+
+    model_flag1: IntProperty(
+        name='Model Flag 2',
+        min=0,
+        max=255,
+    )
+
+    models: CollectionProperty(
+        type=EmptyPropertyGroup,
+    )
+
+    model_index: IntProperty()
+
+    model_groups: CollectionProperty(
+        type=ClumpModelGroupPropertyGroup,
+    )
+
+    model_group_index: IntProperty()
 
     materials: CollectionProperty(
         type=XfbinMaterialPropertyGroup,
@@ -152,6 +242,28 @@ class ClumpPropertyGroup(PropertyGroup):
     def init_data(self, clump: NuccChunkClump):
         self.path = clump.filePath
 
+        # Set the properties
+        self.field00 = clump.field00
+
+        self.coord_flag0 = clump.coord_flag0
+        self.coord_flag1 = clump.coord_flag1
+
+        self.model_flag0 = clump.model_flag0
+        self.model_flag1 = clump.model_flag1
+
+        # Add models
+        self.models.clear()
+        for model in clump.model_chunks:
+            m: EmptyPropertyGroup = self.models.add()
+            m.value = model.name
+
+        # Add model groups
+        self.model_groups.clear()
+        for group in clump.model_groups:
+            g: ClumpModelGroupPropertyGroup = self.model_groups.add()
+            g.init_data(group)
+            g.name = 'Group'
+
         # Get all unique material chunks
         material_chunks = list(dict.fromkeys(chain(*map(lambda x: x.material_chunks, clump.model_chunks))))
 
@@ -160,6 +272,14 @@ class ClumpPropertyGroup(PropertyGroup):
         for material in material_chunks:
             mat: XfbinMaterialPropertyGroup = self.materials.add()
             mat.init_data(material)
+
+    def update_models(self, obj: Object):
+        empties = [c for c in obj.children if c.type == 'EMPTY']
+
+        for model in chain(self.models, *map(lambda x: x.models, self.model_groups)):
+            empty = [e for e in empties if e.name == model.value]
+            if empty:
+                model.empty = empty[0]
 
 
 class XfbinNutTexturePropertyPanel(Panel):
@@ -270,6 +390,46 @@ class XfbinMaterialPropertyPanel(Panel):
                 hex_str_to_int(material.float_format)), text='Floats')
 
 
+class ClumpModelGroupPropertyPanel(Panel):
+    bl_idname = 'OBJECT_PT_xfbin_model_group'
+    bl_parent_id = 'OBJECT_PT_xfbin_clump'
+    bl_label = 'Model Groups'
+
+    bl_space_type = 'PROPERTIES'
+    bl_context = 'object'
+    bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        data: ClumpPropertyGroup = obj.xfbin_clump_data
+
+        draw_xfbin_list(layout, data, f'xfbin_clump_data', 'model_groups', 'model_group_index')
+        index = data.model_group_index
+
+        if data.model_groups and index >= 0:
+            group: ClumpModelGroupPropertyGroup = data.model_groups[index]
+            box = layout.box()
+
+            row = box.row()
+            row.prop(group, 'flag0')
+            row.prop(group, 'flag1')
+
+            box.prop(group, 'unk')
+
+            box.label(text='Models')
+            draw_xfbin_list(box, group, f'xfbin_clump_data.model_groups[{index}]', 'models', 'model_index')
+            model_index = group.model_index
+
+            if group.models and model_index >= 0:
+                model: EmptyPropertyGroup = group.models[model_index]
+                box = layout.box()
+
+                box.prop_search(model, 'empty', context.collection, 'all_objects',
+                                text='Model Object', icon='OUTLINER_OB_EMPTY')
+
+
 class ClumpPropertyPanel(Panel):
     """Panel that displays the ClumpPropertyPanel attached to the selected armature object."""
 
@@ -290,16 +450,30 @@ class ClumpPropertyPanel(Panel):
     def draw(self, context):
         obj = context.object
         layout = self.layout
+        data: ClumpPropertyGroup = obj.xfbin_clump_data
 
-        layout.prop(obj.xfbin_clump_data, 'path')
+        layout.prop(data, 'path')
+
+        layout.label(text='Models')
+        draw_xfbin_list(layout, data, f'xfbin_clump_data', 'models', 'model_index')
+        model_index = data.model_index
+
+        if data.models and model_index >= 0:
+            model: EmptyPropertyGroup = data.models[model_index]
+            box = layout.box()
+
+            box.prop_search(model, 'empty', context.collection, 'all_objects',
+                            text='Model Object', icon='OUTLINER_OB_EMPTY')
 
 
 clump_classes = [
     XfbinNutTexturePropertyGroup,
     XfbinTextureGroupPropertyGroup,
     XfbinMaterialPropertyGroup,
+    ClumpModelGroupPropertyGroup,
     ClumpPropertyGroup,
     ClumpPropertyPanel,
+    ClumpModelGroupPropertyPanel,
     XfbinMaterialPropertyPanel,
     XfbinTextureGroupPropertyPanel,
     XfbinNutTexturePropertyPanel,

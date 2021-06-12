@@ -236,9 +236,6 @@ class NudMeshPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkModel."""
 
     def update_xfbin_material(self, context):
-        # if not (context.object and context.object.parent and context.object.parent.parent):
-        #     return
-
         xfbin_mat = context.object.parent.parent.xfbin_clump_data.materials.get(self.xfbin_material)
 
         if not (xfbin_mat and xfbin_mat.texture_groups):
