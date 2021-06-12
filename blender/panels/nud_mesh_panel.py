@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import (CollectionProperty, EnumProperty, IntProperty,
+from bpy.props import (CollectionProperty, EnumProperty, FloatProperty, IntProperty,
                        StringProperty)
 from bpy.types import Panel, PropertyGroup
 
@@ -177,6 +177,14 @@ class NudMaterialPropertyGroup(PropertyGroup):
         default=0x405,
     )
 
+    unk1: FloatProperty(
+        name='Unk 1',
+    )
+
+    unk2: FloatProperty(
+        name='Unk 2',
+    )
+
     zbuffer_offset: IntProperty(
         name='ZBuffer Offset',
         min=-0x80_00_00_00,
@@ -207,6 +215,8 @@ class NudMaterialPropertyGroup(PropertyGroup):
         self.alpha_function = material.alphaFunction
         self.ref_alpha = material.refAlpha
         self.cull_mode = material.cullMode
+        self.unk1 = material.unk1
+        self.unk2 = material.unk2
         self.zbuffer_offset = material.zBufferOffset
 
         # Add textures
@@ -281,6 +291,13 @@ class NudMeshPropertyGroup(PropertyGroup):
         'Note: Do NOT change this unless you know what you are doing',
     )
 
+    face_flag: IntProperty(
+        name='Face Flag',
+        min=0,
+        max=255,
+        default=0x04,
+    )
+
     xfbin_material: StringProperty(
         name='XFBIN Material',
         description='The XFBIN material that this mesh uses',
@@ -299,6 +316,7 @@ class NudMeshPropertyGroup(PropertyGroup):
         self.vertex_type = str(int(mesh.vertex_type))
         self.bone_type = str(int(mesh.bone_type))
         self.uv_type = str(int(mesh.uv_type))
+        self.face_flag = mesh.face_flag
 
         self.materials.clear()
         for material in mesh.materials:
@@ -424,6 +442,11 @@ class NudMaterialPropertyPanel(Panel):
 
             box.prop(mat, 'ref_alpha')
             box.prop(mat, 'cull_mode')
+
+            row = box.row()
+            row.prop(mat, 'unk1')
+            row.prop(mat, 'unk2')
+
             box.prop(mat, 'zbuffer_offset')
 
 
@@ -453,6 +476,7 @@ class NudMeshPropertyPanel(Panel):
         layout.prop(data, 'vertex_type')
         layout.prop(data, 'bone_type')
         layout.prop(data, 'uv_type')
+        layout.prop(data, 'face_flag')
 
         layout.prop_search(data, 'xfbin_material', clump_data, 'materials')
 

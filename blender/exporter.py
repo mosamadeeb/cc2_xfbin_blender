@@ -25,8 +25,14 @@ from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
 from .common.helpers import hex_str_to_int
-from .panels.clump_panel import XfbinMaterialPropertyGroup
-from .panels.nud_mesh_panel import NudMeshPropertyGroup
+from .panels.clump_panel import (XfbinMaterialPropertyGroup,
+                                 XfbinNutTexturePropertyGroup,
+                                 XfbinTextureGroupPropertyGroup)
+from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
+                                    NudMaterialPropPropertyGroup,
+                                    NudMaterialTexturePropertyGroup,
+                                    NudMeshPropertyGroup)
+from .panels.nud_panel import NudPropertyGroup
 
 
 class ExportXfbin(Operator, ExportHelper):
@@ -245,31 +251,38 @@ class XfbinExporter:
         }
 
         for empty in empties:
+            nud_data: NudPropertyGroup = empty.xfbin_nud_data
             # Create the chunk and set its properties
             chunk = NuccChunkModel(clump.filePath, empty.name)
             chunk.clump_chunk = clump
 
             # Get the index of the mesh bone of this model
-            chunk.coord_index = coord_indices_dict.get(empty.xfbin_nud_data.mesh_bone, 0)
+            chunk.coord_index = coord_indices_dict.get(nud_data.mesh_bone, 0)
 
             chunk.material_chunks = list()
 
             # Reduce the set of flags to a single flag
             chunk.rigging_flag = RiggingFlag(reduce(lambda x, y: int(x) |
-                                                    int(y), empty.xfbin_nud_data.rigging_flag.union(empty.xfbin_nud_data.rigging_flag_extra), 0))
+                                                    int(y), nud_data.rigging_flag.union(nud_data.rigging_flag_extra), 0))
 
-            chunk.material_flags = list(empty.xfbin_nud_data.material_flags)
-            chunk.flag1_floats = list(
-                empty.xfbin_nud_data.flag1_floats) if empty.xfbin_nud_data.material_flags[1] & 0x04 else tuple()
+            chunk.material_flags = list(nud_data.material_flags)
+            chunk.flag1_floats = list(nud_data.flag1_floats) if nud_data.material_flags[1] & 0x04 else tuple()
 
             # Create the nud
             chunk.nud = Nud()
             chunk.nud.name = chunk.name
 
+            # Set the nud's properties
+            chunk.nud.bounding_sphere = pos_m_to_cm_tuple(nud_data.bounding_sphere_nud)
+
             # Always treat nuds as having only 1 mesh group
             chunk.nud.mesh_groups = [NudMeshGroup()]
             mesh_group = chunk.nud.mesh_groups[0]
             mesh_group.name = chunk.name
+
+            mesh_group.bone_flags = nud_data.bone_flag
+            mesh_group.bounding_sphere = pos_m_to_cm_tuple(nud_data.bounding_sphere_group)
+
             mesh_group.meshes = list()
 
             for mesh_obj in [c for c in empty.children if c.type == 'MESH']:
@@ -376,6 +389,7 @@ class XfbinExporter:
                 nud_mesh.vertex_type = NudVertexType(int(mesh_data.vertex_type))
                 nud_mesh.bone_type = NudBoneType(int(mesh_data.bone_type))
                 nud_mesh.uv_type = NudUvType(int(mesh_data.uv_type))
+                nud_mesh.face_flag = mesh_data.face_flag
 
                 # Add the material chunk for this mesh
                 mat = xfbin_mats.get(mesh_data.xfbin_material)
@@ -409,6 +423,7 @@ class XfbinExporter:
 
         # There is a maximum of 4 materials per mesh
         for mat in pg.materials[:4]:
+            mat: NudMaterialPropertyGroup
             m = NudMaterial()
             m.flags = hex_str_to_int(mat.material_id)
 
@@ -418,10 +433,13 @@ class XfbinExporter:
             m.alphaFunction = mat.alpha_function
             m.refAlpha = mat.ref_alpha
             m.cullMode = mat.cull_mode
+            m.unk1 = mat.unk1
+            m.unk2 = mat.unk2
             m.zBufferOffset = mat.zbuffer_offset
 
             m.textures = list()
             for texture in mat.textures:
+                texture: NudMaterialTexturePropertyGroup
                 t = NudMaterialTexture()
 
                 t.unk0 = texture.unk0
@@ -438,6 +456,7 @@ class XfbinExporter:
 
             m.properties = list()
             for prop in mat.material_props:
+                prop: NudMaterialPropPropertyGroup
                 p = NudMaterialProperty()
                 p.name = prop.prop_name
 
@@ -462,11 +481,13 @@ class XfbinExporter:
 
         chunk.texture_groups = list()
         for group in pg.texture_groups:
+            group: XfbinTextureGroupPropertyGroup
             g = MaterialTextureGroup()
             g.unk = group.flag
 
             g.texture_chunks = list()
             for texture in group.textures:
+                texture: XfbinNutTexturePropertyGroup
                 t = NuccChunkTexture(texture.path, texture.texture.name)
 
                 if self.export_textures:

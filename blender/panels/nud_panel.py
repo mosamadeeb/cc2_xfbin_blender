@@ -1,9 +1,11 @@
 import bpy
-from bpy.props import (EnumProperty, FloatVectorProperty, IntVectorProperty,
-                       StringProperty)
+from bpy.props import (EnumProperty, FloatVectorProperty, IntProperty,
+                       IntVectorProperty, StringProperty)
 from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkModel, RiggingFlag
+from ..common.coordinate_converter import pos_cm_to_m_tuple
+from .common import matrix_prop
 
 
 class NudPropertyGroup(PropertyGroup):
@@ -38,6 +40,13 @@ class NudPropertyGroup(PropertyGroup):
         default={'16', '32'},
     )
 
+    bone_flag: IntProperty(
+        name='Bone Flag',
+        min=0,
+        max=255,
+        default=0x14,
+    )
+
     material_flags: IntVectorProperty(
         name='Material Flags',
         description='Affects shading and transparency',
@@ -51,6 +60,16 @@ class NudPropertyGroup(PropertyGroup):
         name='Material Floats',
         description='Only applies when the second flag (index 1) in the material flags contains 0x04',
         size=6,
+    )
+
+    bounding_sphere_nud: FloatVectorProperty(
+        name='Bounding Sphere (NUD)',
+        size=4,
+    )
+
+    bounding_sphere_group: FloatVectorProperty(
+        name='Bounding Sphere (Group)',
+        size=8,
     )
 
     def init_data(self, model: NuccChunkModel, mesh_bone: str):
@@ -76,11 +95,20 @@ class NudPropertyGroup(PropertyGroup):
 
         self.rigging_flag_extra = rigging_flag_extra
 
+        # Get the first (and only) group's bounding sphere and bone flag
+        groups = model.nud.mesh_groups
+        if groups:
+            self.bone_flag = groups[0].bone_flags
+            self.bounding_sphere_group = pos_cm_to_m_tuple(tuple(groups[0].bounding_sphere))
+
         # Set the material flags
         self.material_flags = tuple(model.material_flags)
 
         # Set the flag1 floats
         self.flag1_floats = model.flag1_floats if model.flag1_floats else [0] * 6
+
+        # Set the NUD's bounding sphere
+        self.bounding_sphere_nud = pos_cm_to_m_tuple(tuple(model.nud.bounding_sphere))
 
 
 class NudPropertyPanel(Panel):
@@ -101,17 +129,24 @@ class NudPropertyPanel(Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.object
+        data: NudPropertyGroup = obj.xfbin_nud_data
 
-        layout.prop_search(obj.xfbin_nud_data, 'mesh_bone', obj.parent.data, 'bones')
+        layout.prop_search(data, 'mesh_bone', obj.parent.data, 'bones')
 
-        layout.label(text='Rigging flags')
-        layout.prop(obj.xfbin_nud_data, 'rigging_flag')
-        layout.prop(obj.xfbin_nud_data, 'rigging_flag_extra')
+        layout.label(text='Rigging Flags')
+        box = layout.box()
+        box.prop(data, 'rigging_flag')
+        box.prop(data, 'rigging_flag_extra')
 
-        layout.prop(obj.xfbin_nud_data, 'material_flags')
+        layout.prop(data, 'bone_flag')
 
-        if obj.xfbin_nud_data.material_flags[1] & 0x04:
-            layout.prop(obj.xfbin_nud_data, 'flag1_floats')
+        layout.prop(data, 'material_flags')
+
+        if data.material_flags[1] & 0x04:
+            layout.prop(data, 'flag1_floats')
+
+        matrix_prop(layout, data, 'bounding_sphere_nud', 4, 'Bounding Sphere (NUD)')
+        matrix_prop(layout, data, 'bounding_sphere_group', 8, 'Bounding Sphere (Group)')
 
 
 nud_classes = [
