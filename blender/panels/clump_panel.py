@@ -49,7 +49,8 @@ class XfbinTextureGroupPropertyGroup(PropertyGroup):
 
     flag: IntProperty(
         name='Flag',
-        subtype='UNSIGNED',
+        min=-0x80_00_00_00,
+        max=0x7F_FF_FF_FF,
         update=update_flag,
     )
 
@@ -199,7 +200,7 @@ class XfbinNutTexturePropertyPanel(Panel):
 
             box.prop(texture, 'texture_name')
             box.prop(texture, 'path')
-            box.prop_search(texture, 'texture', bpy.data, 'textures')
+            box.prop_search(texture, 'texture', bpy.data, 'images')
 
 
 class XfbinTextureGroupPropertyPanel(Panel):
@@ -244,6 +245,7 @@ class XfbinMaterialPropertyPanel(Panel):
     bl_space_type = 'PROPERTIES'
     bl_context = 'object'
     bl_region_type = 'WINDOW'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout

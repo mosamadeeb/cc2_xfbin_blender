@@ -9,18 +9,24 @@ from bpy.types import Armature, EditBone, Mesh, Object, Operator
 from bpy_extras.io_utils import ExportHelper
 from mathutils import Matrix, Vector
 
-from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
-                                              NuccChunkCoord,
+from ..xfbin_lib.xfbin.structure.br.br_nud import (NudBoneType, NudUvType,
+                                                   NudVertexType)
+from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, MaterialTextureGroup,
+                                              NuccChunkClump, NuccChunkCoord,
                                               NuccChunkMaterial,
-                                              NuccChunkModel, RiggingFlag)
-from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMesh, NudMeshGroup,
-                                             NudVertex)
+                                              NuccChunkModel, NuccChunkTexture,
+                                              RiggingFlag)
+from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMaterial,
+                                             NudMaterialProperty,
+                                             NudMaterialTexture, NudMesh,
+                                             NudMeshGroup, NudVertex)
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
 from .common.helpers import hex_str_to_int
 from .panels.clump_panel import XfbinMaterialPropertyGroup
+from .panels.nud_mesh_panel import NudMeshPropertyGroup
 
 
 class ExportXfbin(Operator, ExportHelper):
@@ -73,7 +79,7 @@ class ExportXfbin(Operator, ExportHelper):
         default=False,
     )
 
-    export_materials: BoolProperty(
+    export_textures: BoolProperty(
         name='Export materials',
         description='If True, will export the materials in the collection to the XFBIN.\n'
         'If False, will NOT update the materials of each clump in the XFBIN.\n\n'
@@ -101,7 +107,7 @@ class ExportXfbin(Operator, ExportHelper):
         bone_row.enabled = False
 
         mat_row = layout.row()
-        mat_row.prop(self, 'export_materials')
+        mat_row.prop(self, 'export_textures')
         mat_row.enabled = False
 
     def execute(self, context):
@@ -126,7 +132,7 @@ class XfbinExporter:
 
         self.export_meshes = import_settings.get('export_meshes')
         self.export_bones = import_settings.get('export_bones')
-        self.export_materials = import_settings.get('export_materials')
+        self.export_textures = import_settings.get('export_textures')
 
     xfbin: Xfbin
 
@@ -138,7 +144,7 @@ class XfbinExporter:
 
             self.xfbin = read_xfbin(self.filepath)
         else:
-            self.export_meshes = self.export_bones = self.export_materials = True
+            self.export_meshes = self.export_bones = self.export_textures = True
 
         for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
             self.xfbin.add_clump_page(self.make_clump(armature_obj, context))
@@ -364,6 +370,25 @@ class XfbinExporter:
                         f'[NUD MESH] {mesh_obj.name} has {len(bm.faces)} faces (limit is {NudMesh.MAX_FACES}) and will be skipped.')
                     continue
 
+                mesh_data: NudMeshPropertyGroup = mesh_obj.xfbin_mesh_data
+
+                # Get the vertex/bone/uv formats from the mesh property group
+                nud_mesh.vertex_type = NudVertexType(int(mesh_data.vertex_type))
+                nud_mesh.bone_type = NudBoneType(int(mesh_data.bone_type))
+                nud_mesh.uv_type = NudUvType(int(mesh_data.uv_type))
+
+                # Add the material chunk for this mesh
+                mat = xfbin_mats.get(mesh_data.xfbin_material)
+                if mat is None:
+                    print(
+                        f'[NUD MESH] {mesh_obj.name} has a non-existing XFBIN material and will be skipped.')
+                    continue
+
+                chunk.material_chunks.append(mat)
+
+                # Get the material properties of this mesh
+                nud_mesh.materials = self.make_nud_materials(mesh_data, clump, context)
+
                 # Only add the mesh if it doesn't exceed the vertex and face limits
                 mesh_group.meshes.append(nud_mesh)
 
@@ -379,16 +404,77 @@ class XfbinExporter:
 
         return model_chunks
 
-    def make_xfbin_material(self, property_group: XfbinMaterialPropertyGroup, clump: NuccChunkClump, context) -> NuccChunkMaterial:
-        chunk = NuccChunkMaterial(clump.filePath, property_group.material_name)
+    def make_nud_materials(self, pg: NudMeshPropertyGroup, clump: NuccChunkClump, context) -> List[NudMaterial]:
+        materials = list()
 
-        chunk.field02 = property_group.field02
-        chunk.field04 = property_group.field04
+        # There is a maximum of 4 materials per mesh
+        for mat in pg.materials[:4]:
+            m = NudMaterial()
+            m.flags = hex_str_to_int(mat.material_id)
 
-        chunk.format = hex_str_to_int(property_group.float_format)
-        chunk.floats = list(property_group.floats)[:NuccChunkMaterial.float_count(chunk.format)]
+            m.sourceFactor = mat.source_factor
+            m.destFactor = mat.dest_factor
+            m.alphaTest = mat.alpha_test
+            m.alphaFunction = mat.alpha_function
+            m.refAlpha = mat.ref_alpha
+            m.cullMode = mat.cull_mode
+            m.zBufferOffset = mat.zbuffer_offset
 
-        # TODO: Add texture groups
+            m.textures = list()
+            for texture in mat.textures:
+                t = NudMaterialTexture()
+
+                t.unk0 = texture.unk0
+                t.mapMode = texture.map_mode
+                t.wrapModeS = texture.wrap_mode_s
+                t.wrapModeT = texture.wrap_mode_t
+                t.minFilter = texture.min_filter
+                t.magFilter = texture.mag_filter
+                t.mipDetail = texture.mip_detail
+                t.unk1 = texture.unk1
+                t.unk2 = texture.unk2
+
+                m.textures.append(t)
+
+            m.properties = list()
+            for prop in mat.material_props:
+                p = NudMaterialProperty()
+                p.name = prop.prop_name
+
+                p.values = list()
+                for i in range(prop.count):
+                    p.values.append(prop.values[i].value)
+
+                m.properties.append(p)
+
+            materials.append(m)
+
+        return materials
+
+    def make_xfbin_material(self, pg: XfbinMaterialPropertyGroup, clump: NuccChunkClump, context) -> NuccChunkMaterial:
+        chunk = NuccChunkMaterial(clump.filePath, pg.material_name)
+
+        chunk.field02 = pg.field02
+        chunk.field04 = pg.field04
+
+        chunk.format = hex_str_to_int(pg.float_format)
+        chunk.floats = list(pg.floats)[:NuccChunkMaterial.float_count(chunk.format)]
+
+        chunk.texture_groups = list()
+        for group in pg.texture_groups:
+            g = MaterialTextureGroup()
+            g.unk = group.flag
+
+            g.texture_chunks = list()
+            for texture in group.textures:
+                t = NuccChunkTexture(texture.path, texture.texture.name)
+
+                if self.export_textures:
+                    # TODO: Export textures
+                    pass
+
+                g.texture_chunks.append(t)
+            chunk.texture_groups.append(g)
 
         return chunk
 
