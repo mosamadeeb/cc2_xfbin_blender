@@ -264,8 +264,11 @@ class ClumpPropertyGroup(PropertyGroup):
             g.init_data(group)
             g.name = 'Group'
 
+        all_model_chunks = [i for i in dict.fromkeys(
+            chain(clump.model_chunks, *map(lambda x: x.model_chunks, clump.model_groups))) if i is not None]
+
         # Get all unique material chunks
-        material_chunks = list(dict.fromkeys(chain(*map(lambda x: x.material_chunks, clump.model_chunks))))
+        material_chunks = list(dict.fromkeys(chain(*map(lambda x: x.material_chunks, all_model_chunks))))
 
         # Create a property group for each material
         self.materials.clear()

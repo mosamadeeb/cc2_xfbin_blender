@@ -56,7 +56,7 @@ class ExportXfbin(Operator, ExportHelper):
 
         items.update([(c.name, c.name, '') for c in bpy.data.collections])
 
-        return list(items)
+        return list([i for i in items if i[0] != 'Collection'])
 
     collection: EnumProperty(
         items=collection_callback,
@@ -120,11 +120,15 @@ class ExportXfbin(Operator, ExportHelper):
         mat_row.enabled = False
 
     def execute(self, context):
+        import time
+
         # try:
+        start_time = time.time()
         exporter = XfbinExporter(self.filepath, self.as_keywords(ignore=('filter_glob',)))
         exporter.export_collection(context)
 
-        self.report({'INFO'}, f'Finished exporting {exporter.collection.name}')
+        elapsed_s = "{:.2f}s".format(time.time() - start_time)
+        self.report({'INFO'}, f'Finished exporting {exporter.collection.name} in {elapsed_s}')
         return {'FINISHED'}
         # except Exception as e:
         #     print(e)
@@ -211,7 +215,7 @@ class XfbinExporter:
 
             # Add the model groups from the clump data
             clump.model_groups = list()
-            for group in clump_data.models:
+            for group in clump_data.model_groups:
                 group: ClumpModelGroupPropertyGroup
                 group_models = list(map(lambda x: x.value, group.models))
                 g = ClumpModelGroup()
@@ -219,7 +223,17 @@ class XfbinExporter:
                 g.flag0 = group.flag0
                 g.flag1 = group.flag1
                 g.unk = hex_str_to_int(group.unk)
-                g.model_chunks = [c for c in model_chunks if c.name in group_models]
+
+                g.model_chunks = list()
+                for name in group_models:
+                    if name == 'None':
+                        g.model_chunks.append(None)
+                        continue
+
+                    # A bit slow but needed to maintain the None references
+                    model = [c for c in model_chunks if c.name == name]
+                    if model:
+                        g.model_chunks.append(model[0])
 
                 clump.model_groups.append(g)
         elif old_clump:
@@ -358,12 +372,12 @@ class XfbinExporter:
 
                             # Position and normal, tangent, bitangent
                             vert.position = pos_scaled_from_blender(l.vert.co.xyz)
-                            vert.normal = pos_from_blender(l.calc_normal().xyz)  # l.vert.normal.xyz
+                            vert.normal = pos_from_blender(l.vert.normal.xyz)  # l.calc_normal().xyz
                             vert.tangent = pos_from_blender(l.calc_tangent().xyz)
                             vert.bitangent = Vector(vert.normal).cross(Vector(vert.tangent))
 
                             # Color
-                            vert.color = l[color_layer].xyzw
+                            vert.color = tuple(map(lambda x: int(x), l[color_layer]))
 
                             # UV
                             vert.uv = list()
@@ -517,7 +531,7 @@ class XfbinExporter:
             g.texture_chunks = list()
             for texture in group.textures:
                 texture: XfbinNutTexturePropertyGroup
-                t = NuccChunkTexture(texture.path, texture.texture.name)
+                t = NuccChunkTexture(texture.path, texture.texture)
 
                 if self.export_textures:
                     # TODO: Export textures
