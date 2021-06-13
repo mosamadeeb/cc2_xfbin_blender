@@ -377,7 +377,9 @@ class XfbinExporter:
                             vert.bitangent = Vector(vert.normal).cross(Vector(vert.tangent))
 
                             # Color
-                            vert.color = tuple(map(lambda x: int(x), l[color_layer]))
+                            vert.color = tuple()
+                            if color_layer:
+                                vert.color = tuple(map(lambda x: int(x), l[color_layer]))
 
                             # UV
                             vert.uv = list()
