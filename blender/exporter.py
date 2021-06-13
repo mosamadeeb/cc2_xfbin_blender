@@ -379,7 +379,7 @@ class XfbinExporter:
                             # Color
                             vert.color = tuple()
                             if color_layer:
-                                vert.color = tuple(map(lambda x: int(x), l[color_layer]))
+                                vert.color = tuple(map(lambda x: int(x * 255), l[color_layer]))
 
                             # UV
                             vert.uv = list()

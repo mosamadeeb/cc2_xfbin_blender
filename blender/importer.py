@@ -79,6 +79,9 @@ class XfbinImporter:
             self.make_objects(clump, armature_obj, context)
             bpy.ops.object.mode_set(mode='OBJECT')
 
+            # Update the models' PointerProperty to use the models that were just imported
+            armature_obj.xfbin_clump_data.update_models(armature_obj)
+
     def make_collection(self, context) -> bpy.types.Collection:
         """
         Build a collection to hold all of the objects and meshes from the GMDScene.
@@ -315,7 +318,7 @@ class XfbinImporter:
             for face in bm.faces:
                 for loop in face.loops:
                     color = mesh.vertices[loop.vert.index].color
-                    loop[col_layer] = (color[0], color[1], color[2], color[3])
+                    loop[col_layer] = tuple(map(lambda x: x / 255, color))
 
         # UVs
         if len(mesh.vertices) and mesh.vertices[0].uv:
