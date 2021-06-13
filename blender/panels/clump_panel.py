@@ -76,6 +76,8 @@ class XfbinTextureGroupPropertyGroup(PropertyGroup):
 class XfbinMaterialPropertyGroup(PropertyGroup):
     """Property group that contains attributes of a nuccChunkMaterial."""
 
+    FLOATS_SIZE = 0x20
+
     def update_float_format(self, context):
         old_val = self.float_format
         new_val = format_hex_str(self.float_format, 1)
@@ -107,7 +109,7 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
         default='00',
         update=update_float_format,
     )
-    floats: FloatVectorProperty(name='Floats', size=16)
+    floats: FloatVectorProperty(name='Floats', size=FLOATS_SIZE)
 
     texture_groups: CollectionProperty(
         type=XfbinTextureGroupPropertyGroup,
@@ -126,7 +128,7 @@ class XfbinMaterialPropertyGroup(PropertyGroup):
         self.field04 = material.field04
 
         self.float_format = int_to_hex_str(material.format, 1)
-        self.floats = material.floats + ((0.0,) * (16 - len(material.floats)))
+        self.floats = material.floats + ((0.0,) * (self.FLOATS_SIZE - len(material.floats)))
 
         self.texture_groups.clear()
         for group in material.texture_groups:
