@@ -11,7 +11,7 @@ from ...xfbin_lib.xfbin.structure.nucc import (ClumpModelGroup,
                                                NuccChunkMaterial,
                                                NuccChunkTexture)
 from ..common.helpers import format_hex_str, hex_str_to_int, int_to_hex_str
-from .common import EmptyPropertyGroup, draw_xfbin_list, matrix_prop
+from .common import EmptyPropertyGroup, draw_copy_paste_ops, draw_xfbin_list, matrix_prop
 
 
 class XfbinNutTexturePropertyGroup(PropertyGroup):
@@ -446,9 +446,6 @@ class ClumpPropertyPanel(Panel):
     bl_context = 'object'
     bl_region_type = 'WINDOW'
 
-    panel_count = 0
-    material_panels = list()
-
     @classmethod
     def poll(cls, context):
         return context.object and context.object.type == 'ARMATURE'
@@ -457,6 +454,8 @@ class ClumpPropertyPanel(Panel):
         obj = context.object
         layout = self.layout
         data: ClumpPropertyGroup = obj.xfbin_clump_data
+
+        draw_copy_paste_ops(layout, 'xfbin_clump_data', 'Clump Properties')
 
         layout.prop(data, 'path')
 
@@ -472,15 +471,19 @@ class ClumpPropertyPanel(Panel):
                             text='Model Object', icon='OUTLINER_OB_EMPTY')
 
 
-clump_classes = [
+clump_property_groups = (
     XfbinNutTexturePropertyGroup,
     XfbinTextureGroupPropertyGroup,
     XfbinMaterialPropertyGroup,
     ClumpModelGroupPropertyGroup,
     ClumpPropertyGroup,
+)
+
+clump_classes = (
+    *clump_property_groups,
     ClumpPropertyPanel,
     ClumpModelGroupPropertyPanel,
     XfbinMaterialPropertyPanel,
     XfbinTextureGroupPropertyPanel,
     XfbinNutTexturePropertyPanel,
-]
+)

@@ -7,7 +7,7 @@ from ...xfbin_lib.xfbin.structure.nud import (NudMaterial, NudMaterialProperty,
                                               NudMaterialTexture, NudMesh)
 from ..common.helpers import format_hex_str, int_to_hex_str
 from .clump_panel import ClumpPropertyGroup
-from .common import FloatPropertyGroup, draw_xfbin_list, matrix_prop_group
+from .common import FloatPropertyGroup, draw_copy_paste_ops, draw_xfbin_list, matrix_prop_group
 
 
 class NudMaterialPropPropertyGroup(PropertyGroup):
@@ -473,6 +473,8 @@ class NudMeshPropertyPanel(Panel):
         data: NudMeshPropertyGroup = obj.xfbin_mesh_data
         clump_data: ClumpPropertyGroup = obj.parent.parent.xfbin_clump_data
 
+        draw_copy_paste_ops(layout, 'xfbin_mesh_data', 'Mesh Properties')
+
         layout.prop(data, 'vertex_type')
         layout.prop(data, 'bone_type')
         layout.prop(data, 'uv_type')
@@ -481,13 +483,17 @@ class NudMeshPropertyPanel(Panel):
         layout.prop_search(data, 'xfbin_material', clump_data, 'materials')
 
 
-nud_mesh_classes = [
+nud_mesh_property_groups = (
     NudMaterialPropPropertyGroup,
     NudMaterialTexturePropertyGroup,
     NudMaterialPropertyGroup,
     NudMeshPropertyGroup,
+)
+
+nud_mesh_classes = (
+    *nud_mesh_property_groups,
     NudMeshPropertyPanel,
     NudMaterialPropertyPanel,
     NudMaterialTexturePropertyPanel,
     NudMaterialPropPropertyPanel,
-]
+)

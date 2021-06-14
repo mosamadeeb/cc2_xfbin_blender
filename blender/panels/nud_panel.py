@@ -5,7 +5,7 @@ from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkModel, RiggingFlag
 from ..common.coordinate_converter import pos_cm_to_m_tuple
-from .common import matrix_prop
+from .common import draw_copy_paste_ops, matrix_prop
 
 
 class NudPropertyGroup(PropertyGroup):
@@ -131,6 +131,8 @@ class NudPropertyPanel(Panel):
         obj = context.object
         data: NudPropertyGroup = obj.xfbin_nud_data
 
+        draw_copy_paste_ops(layout, 'xfbin_nud_data', 'NUD Properties')
+
         layout.prop_search(data, 'mesh_bone', obj.parent.data, 'bones')
 
         layout.label(text='Rigging Flags')
@@ -149,7 +151,11 @@ class NudPropertyPanel(Panel):
         matrix_prop(layout, data, 'bounding_sphere_group', 8, 'Bounding Sphere (Group)')
 
 
-nud_classes = [
+nud_property_groups = (
     NudPropertyGroup,
+)
+
+nud_classes = (
+    *nud_property_groups,
     NudPropertyPanel,
-]
+)
