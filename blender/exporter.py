@@ -1,10 +1,12 @@
 from functools import reduce
+from itertools import chain
 from os import path
 from typing import Dict, List
 
 import bmesh
 import bpy
-from bpy.props import BoolProperty, EnumProperty, StringProperty
+from bpy.props import (BoolProperty, CollectionProperty, EnumProperty,
+                       StringProperty)
 from bpy.types import Armature, EditBone, Mesh, Object, Operator
 from bpy_extras.io_utils import ExportHelper
 from mathutils import Matrix, Vector
@@ -31,6 +33,7 @@ from .panels.clump_panel import (ClumpModelGroupPropertyGroup,
                                  XfbinMaterialPropertyGroup,
                                  XfbinNutTexturePropertyGroup,
                                  XfbinTextureGroupPropertyGroup)
+from .panels.common import BoolPropertyGroup
 from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
                                     NudMaterialPropPropertyGroup,
                                     NudMaterialTexturePropertyGroup,
@@ -58,10 +61,19 @@ class ExportXfbin(Operator, ExportHelper):
 
         return list([i for i in items if i[0] != 'Collection'])
 
+    def collection_update(self, context):
+        self.meshes_to_export.clear()
+        col = bpy.data.collections.get(self.collection)
+        if col:
+            for armature in [obj for obj in col.objects if obj.type == 'ARMATURE']:
+                for empty in [obj for obj in armature.children if obj.type == 'EMPTY']:
+                    self.meshes_to_export.add().name = empty.name
+
     collection: EnumProperty(
         items=collection_callback,
         name='Collection to Export',
         description='The collection to be exported. All armatures in the collection will be converted and put in the same XFBIN',
+        update=collection_update,
     )
 
     inject_to_xfbin: BoolProperty(
@@ -96,6 +108,17 @@ class ExportXfbin(Operator, ExportHelper):
         default=False,
     )
 
+    export_specific_meshes: BoolProperty(
+        name='Export specific meshes',
+        description='If True, will export only the selected (NUD) models in the box below.\n'
+        'If False, will export all models in the collection.\n\n',
+        default=False,
+    )
+
+    meshes_to_export: CollectionProperty(
+        type=BoolPropertyGroup,
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -118,6 +141,27 @@ class ExportXfbin(Operator, ExportHelper):
         mat_row = layout.row()
         mat_row.prop(self, 'export_textures')
         mat_row.enabled = False
+
+        layout.prop(self, 'export_specific_meshes')
+
+        if self.export_specific_meshes:
+            # Update the "meshes to export" collection
+            if not self.meshes_to_export:
+                self.collection_update(context)
+
+            box1 = layout.box()
+            collection = bpy.data.collections.get(self.collection)
+
+            if not collection:
+                box1.label(text='No collection has been selected.')
+            else:
+                box1.label(text='Selected models:')
+                # Draw a check box for each NUD to choose which models should be exported
+                for item in self.meshes_to_export:
+                    row = box1.split(factor=0.80)
+
+                    row.label(text=item.name)
+                    row.prop(item, 'value', text='')
 
     def execute(self, context):
         import time
@@ -146,6 +190,8 @@ class XfbinExporter:
         self.export_meshes = import_settings.get('export_meshes')
         self.export_bones = import_settings.get('export_bones')
         self.export_textures = import_settings.get('export_textures')
+        self.export_specific_meshes = import_settings.get('export_specific_meshes')
+        self.meshes_to_export = import_settings.get('meshes_to_export')
 
     xfbin: Xfbin
 
@@ -293,7 +339,22 @@ class XfbinExporter:
             for i, name in enumerate(tuple(map(lambda c: c.name, clump.coord_chunks)))
         }
 
+        # Get a list of all models in from the old clump
+        old_clump_all_models = list(dict.fromkeys(chain(old_clump.model_chunks, *old_clump.model_groups)))
+
         for empty in empties:
+            if self.export_specific_meshes:
+                # Use existing models from the old clump if the current model is not supposed to be exported
+                mesh_index = self.meshes_to_export.find(empty.name)
+                if mesh_index == -1:
+                    continue
+
+                if self.meshes_to_export[mesh_index].value is False:
+                    old_model = [c for c in old_clump_all_models if c and c.name == empty.name]
+                    if old_model:
+                        model_chunks.append(old_model[0])
+                    continue
+
             nud_data: NudPropertyGroup = empty.xfbin_nud_data
             # Create the chunk and set its properties
             chunk = NuccChunkModel(clump.filePath, empty.name)

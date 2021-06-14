@@ -17,9 +17,9 @@ from .panels.nud_panel import (NudPropertyGroup, nud_classes,
 XfbinPointersGroup: Type
 
 classes = (
+    *common_classes,
     ImportXFBIN,
     ExportXfbin,
-    *common_classes,
     *clump_classes,
     *nud_classes,
     *nud_mesh_classes,

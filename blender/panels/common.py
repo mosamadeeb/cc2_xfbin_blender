@@ -2,8 +2,8 @@ from typing import Dict, Type
 
 import bpy
 from bpy.app.handlers import persistent
-from bpy.props import (FloatProperty, IntProperty, PointerProperty,
-                       StringProperty)
+from bpy.props import (BoolProperty, FloatProperty, IntProperty,
+                       PointerProperty, StringProperty)
 from bpy.types import Operator, PropertyGroup, UILayout, UIList
 
 # Globals
@@ -55,6 +55,10 @@ class IntPropertyGroup(PropertyGroup):
 
 class FloatPropertyGroup(PropertyGroup):
     value: FloatProperty()
+
+
+class BoolPropertyGroup(PropertyGroup):
+    value: BoolProperty()
 
 
 class EmptyPropertyGroup(PropertyGroup):
@@ -357,6 +361,7 @@ def draw_xfbin_list(layout: UILayout, list_index: int, data, path: str, collecti
 common_classes = (
     IntPropertyGroup,
     FloatPropertyGroup,
+    BoolPropertyGroup,
     EmptyPropertyGroup,
     XFBIN_PANEL_OT_CopyPropertyGroup,
     XFBIN_PANEL_OT_PastePropertyGroup,
