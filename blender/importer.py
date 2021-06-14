@@ -77,7 +77,10 @@ class XfbinImporter:
 
             armature_obj = self.make_armature(clump, context)
             self.make_objects(clump, armature_obj, context)
+            
+            # Set the armature as the active object after importing everything
             bpy.ops.object.mode_set(mode='OBJECT')
+            context.view_layer.objects.active = armature_obj
 
             # Update the models' PointerProperty to use the models that were just imported
             armature_obj.xfbin_clump_data.update_models(armature_obj)

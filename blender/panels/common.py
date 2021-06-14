@@ -237,12 +237,12 @@ class XFBIN_LIST_OT_PasteItem(Operator):
 def draw_xfbin_list(layout: UILayout, list_index: int, data, path: str, collection_name: str, index_name: str):
     """Draws a list using the layout and populates it with the given collection and index."""
 
-    row = layout.row()
+    row = layout.split(factor=0.80)
     row.template_list(f'XFBIN_LIST_UL_List_{list_index}', 'xfbin_list', data, collection_name, data, index_name)
 
-    row = layout.row()
+    col = row.column()
     for op, txt, icn in XFBIN_OPERATORS:
-        opr = row.operator(f'xfbin_list.{op}', text=txt, icon=icn)
+        opr = col.operator(f'xfbin_list.{op}', text=txt, icon=icn)
         opr.prop_path = path
         opr.collection = collection_name
         opr.index = index_name

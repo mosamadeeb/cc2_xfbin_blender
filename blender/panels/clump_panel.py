@@ -430,7 +430,7 @@ class ClumpModelGroupPropertyPanel(Panel):
 
             if group.models and model_index >= 0:
                 model: EmptyPropertyGroup = group.models[model_index]
-                box = layout.box()
+                box = box.box()
 
                 box.prop_search(model, 'empty', context.collection, 'all_objects',
                                 text='Model Object', icon='OUTLINER_OB_EMPTY')
