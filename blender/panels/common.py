@@ -1,6 +1,13 @@
 import bpy
-from bpy.props import FloatProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import (FloatProperty, IntProperty, PointerProperty,
+                       StringProperty)
 from bpy.types import Operator, PropertyGroup, UILayout, UIList
+
+# Globals
+XFBIN_CLIPBOARD: Dict[Type, PropertyGroup] = dict()
+XFBIN_OPERATORS = (('new_item', 'New', 'ADD'), ('delete_item', 'Remove', 'REMOVE'),
+                   ('move_item', 'Up', 'TRIA_UP'), ('move_item', 'Down', 'TRIA_DOWN'),
+                   ('copy_item', 'Copy', 'COPYDOWN'), ('paste_item', 'Paste', 'PASTEDOWN'),)
 
 
 def matrix_prop(ui_layout: UILayout, data, prop_name: str, length: int, text=''):
@@ -38,7 +45,7 @@ class EmptyPropertyGroup(PropertyGroup):
     def update_empty(self, context):
         if self.empty:
             self.value = self.empty.name
-        
+
     def update_value(self, context):
         self.update_name()
 
@@ -73,7 +80,7 @@ class XFBIN_LIST_UL_List(UIList):
 
 
 class XFBIN_LIST_OT_NewItem(Operator):
-    """Add a new item to the list."""
+    """Add a new item to the list"""
 
     bl_idname = 'xfbin_list.new_item'
     bl_label = 'Add a new item'
@@ -87,11 +94,13 @@ class XFBIN_LIST_OT_NewItem(Operator):
         collection = prop.path_resolve(self.collection)
 
         collection.add().update_name()
+        prop[self.index] = len(collection) - 1
+
         return{'FINISHED'}
 
 
 class XFBIN_LIST_OT_DeleteItem(Operator):
-    """Delete the selected item from the list."""
+    """Delete the selected item from the list"""
 
     bl_idname = 'xfbin_list.delete_item'
     bl_label = 'Deletes an item'
@@ -105,15 +114,20 @@ class XFBIN_LIST_OT_DeleteItem(Operator):
         collection = prop.path_resolve(self.collection)
         index = prop.path_resolve(self.index)
 
-        if collection:
-            collection.remove(index)
-            prop[self.index] = min(max(0, index - 1), len(collection) - 1)
+        if not collection:
+            self.report({'ERROR_INVALID_CONTEXT'}, 'Cannot delete an item when the list is empty')
+            return{'CANCELLED'}
 
+        name = collection[index].name
+        collection.remove(index)
+        prop[self.index] = min(max(0, index - 1), len(collection) - 1)
+
+        self.report({'INFO'}, f'Deleted "{name}" from the list')
         return{'FINISHED'}
 
 
 class XFBIN_LIST_OT_MoveItem(Operator):
-    """Move an item in the list."""
+    """Move an item in the list"""
 
     bl_idname = 'xfbin_list.move_item'
     bl_label = 'Move an item in the list'
@@ -134,6 +148,10 @@ class XFBIN_LIST_OT_MoveItem(Operator):
         collection = prop.path_resolve(self.collection)
         index = prop.path_resolve(self.index)
 
+        if not collection:
+            self.report({'ERROR_INVALID_CONTEXT'}, 'Cannot move an item when the list is empty')
+            return{'CANCELLED'}
+
         neighbor = index + (-1 if self.direction == 'UP' else 1)
         collection.move(neighbor, index)
 
@@ -146,6 +164,60 @@ class XFBIN_LIST_OT_MoveItem(Operator):
         return{'FINISHED'}
 
 
+class XFBIN_LIST_OT_CopyItem(Operator):
+    """Copy an item from the list"""
+
+    bl_idname = 'xfbin_list.copy_item'
+    bl_label = 'Copy an item'
+
+    prop_path: StringProperty()
+    collection: StringProperty()
+    index: StringProperty()
+
+    def execute(self, context):
+        prop = context.object.path_resolve(self.prop_path)
+        collection = prop.path_resolve(self.collection)
+        index = prop.path_resolve(self.index)
+
+        XFBIN_CLIPBOARD[type(collection[index])] = collection[index]
+
+        self.report({'INFO'}, f'Copied "{collection[index].name}" from the list')
+        return{'FINISHED'}
+
+
+class XFBIN_LIST_OT_PasteItem(Operator):
+    """Paste an item from the clipboard to the list"""
+
+    bl_idname = 'xfbin_list.paste_item'
+    bl_label = 'Paste an item'
+
+    prop_path: StringProperty()
+    collection: StringProperty()
+    index: StringProperty()
+
+    def execute(self, context):
+        prop = context.object.path_resolve(self.prop_path)
+        collection = prop.path_resolve(self.collection)
+
+        # Create a new item in the list
+        dummy = collection.add()
+        item = XFBIN_CLIPBOARD.get(type(dummy))
+
+        if not item:
+            # Remove the dummy
+            collection.remove(len(collection) - 1)
+            self.report({'ERROR_INVALID_CONTEXT'}, 'No item of this type has been copied before')
+            return{'CANCELLED'}
+
+        # Set the index to the new item and copy its properties to the dummy item
+        prop[self.index] = len(collection) - 1
+        for k, v in item.items():
+            dummy[k] = v
+
+        self.report({'INFO'}, f'Pasted "{dummy.name}" to the list')
+        return{'FINISHED'}
+
+
 def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, index_name: str):
     """Draws a list using the layout and populates it with the given collection and index."""
 
@@ -153,7 +225,7 @@ def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, ind
     row.template_list('XFBIN_LIST_UL_List', 'xfbin_list', data, collection_name, data, index_name)
 
     row = layout.row()
-    for op, txt, icn in (('new_item', 'New', 'ADD'), ('delete_item', 'Remove', 'REMOVE'), ('move_item', 'Up', 'TRIA_UP'), ('move_item', 'Down', 'TRIA_DOWN')):
+    for op, txt, icn in XFBIN_OPERATORS:
         opr = row.operator(f'xfbin_list.{op}', text=txt, icon=icn)
         opr.prop_path = path
         opr.collection = collection_name
@@ -173,4 +245,6 @@ common_classes = [
     XFBIN_LIST_OT_NewItem,
     XFBIN_LIST_OT_DeleteItem,
     XFBIN_LIST_OT_MoveItem,
+    XFBIN_LIST_OT_CopyItem,
+    XFBIN_LIST_OT_PasteItem,
 ]
