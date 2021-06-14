@@ -1,9 +1,12 @@
+from typing import Dict, Type
+
 import bpy
 from bpy.props import (FloatProperty, IntProperty, PointerProperty,
                        StringProperty)
 from bpy.types import Operator, PropertyGroup, UILayout, UIList
 
 # Globals
+XFBIN_LISTS = list()
 XFBIN_CLIPBOARD: Dict[Type, PropertyGroup] = dict()
 XFBIN_OPERATORS = (('new_item', 'New', 'ADD'), ('delete_item', 'Remove', 'REMOVE'),
                    ('move_item', 'Up', 'TRIA_UP'), ('move_item', 'Down', 'TRIA_DOWN'),
@@ -77,6 +80,19 @@ class XFBIN_LIST_UL_List(UIList):
         elif self.layout_type in {'GRID'}:
             layout.alignment = 'CENTER'
             layout.label(text='')
+
+
+# TODO: Change this to be more dynamic, instead of relying on a fixed value
+# Create a separate list for each unique list to be shown in a single object
+# This is needed to avoid the lists being scrolled/expanded at the same time
+for i in range(6):
+    panel_idname = f'XFBIN_LIST_UL_List_{i}'
+    panel = type(panel_idname,
+                 (XFBIN_LIST_UL_List,),
+                 {'bl_idname': panel_idname, },
+                 )
+
+    XFBIN_LISTS.append(panel)
 
 
 class XFBIN_LIST_OT_NewItem(Operator):
@@ -218,11 +234,11 @@ class XFBIN_LIST_OT_PasteItem(Operator):
         return{'FINISHED'}
 
 
-def draw_xfbin_list(layout: UILayout, data, path: str, collection_name: str, index_name: str):
+def draw_xfbin_list(layout: UILayout, list_index: int, data, path: str, collection_name: str, index_name: str):
     """Draws a list using the layout and populates it with the given collection and index."""
 
     row = layout.row()
-    row.template_list('XFBIN_LIST_UL_List', 'xfbin_list', data, collection_name, data, index_name)
+    row.template_list(f'XFBIN_LIST_UL_List_{list_index}', 'xfbin_list', data, collection_name, data, index_name)
 
     row = layout.row()
     for op, txt, icn in XFBIN_OPERATORS:
@@ -241,7 +257,7 @@ common_classes = [
     IntPropertyGroup,
     FloatPropertyGroup,
     EmptyPropertyGroup,
-    XFBIN_LIST_UL_List,
+    *XFBIN_LISTS,
     XFBIN_LIST_OT_NewItem,
     XFBIN_LIST_OT_DeleteItem,
     XFBIN_LIST_OT_MoveItem,

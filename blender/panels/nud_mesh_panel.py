@@ -1,6 +1,6 @@
 import bpy
-from bpy.props import (CollectionProperty, EnumProperty, FloatProperty, IntProperty,
-                       StringProperty)
+from bpy.props import (CollectionProperty, EnumProperty, FloatProperty,
+                       IntProperty, StringProperty)
 from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nud import (NudMaterial, NudMaterialProperty,
@@ -107,7 +107,8 @@ class NudMaterialTexturePropertyGroup(PropertyGroup):
     )
 
     def update_name(self):
-        pass
+        if not self.name:
+            self.name = 'Texture'
 
     def init_data(self, texture: NudMaterialTexture):
         self.unk0 = texture.unk0
@@ -346,7 +347,7 @@ class NudMaterialPropPropertyPanel(Panel):
         mat: NudMaterialPropertyGroup = data.materials[data.material_index]
 
         draw_xfbin_list(
-            layout, mat, f'xfbin_mesh_data.materials[{data.material_index}]', 'material_props', 'material_prop_index')
+            layout, 2, mat, f'xfbin_mesh_data.materials[{data.material_index}]', 'material_props', 'material_prop_index')
         prop_index = mat.material_prop_index
 
         if mat.material_props and prop_index >= 0:
@@ -381,7 +382,8 @@ class NudMaterialTexturePropertyPanel(Panel):
         data: NudMeshPropertyGroup = obj.xfbin_mesh_data
         mat: NudMaterialPropertyGroup = data.materials[data.material_index]
 
-        draw_xfbin_list(layout, mat, f'xfbin_mesh_data.materials[{data.material_index}]', 'textures', 'texture_index')
+        draw_xfbin_list(
+            layout, 1, mat, f'xfbin_mesh_data.materials[{data.material_index}]', 'textures', 'texture_index')
         texture_index = mat.texture_index
 
         if mat.textures and texture_index >= 0:
@@ -420,7 +422,7 @@ class NudMaterialPropertyPanel(Panel):
         obj = context.object
         data: NudMeshPropertyGroup = obj.xfbin_mesh_data
 
-        draw_xfbin_list(layout, data, 'xfbin_mesh_data', 'materials', 'material_index')
+        draw_xfbin_list(layout, 0, data, 'xfbin_mesh_data', 'materials', 'material_index')
         mat_index = data.material_index
 
         if data.materials and mat_index >= 0:

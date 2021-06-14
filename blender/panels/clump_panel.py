@@ -312,6 +312,7 @@ class XfbinNutTexturePropertyPanel(Panel):
 
         draw_xfbin_list(
             layout,
+            5,
             group,
             f'xfbin_clump_data.materials[{data.material_index}].texture_groups[{mat.texture_group_index}]',
             'textures',
@@ -350,7 +351,7 @@ class XfbinTextureGroupPropertyPanel(Panel):
         mat: XfbinMaterialPropertyGroup = data.materials[data.material_index]
 
         draw_xfbin_list(
-            layout, mat, f'xfbin_clump_data.materials[{data.material_index}]', 'texture_groups', 'texture_group_index')
+            layout, 4, mat, f'xfbin_clump_data.materials[{data.material_index}]', 'texture_groups', 'texture_group_index')
         texture_group_index = mat.texture_group_index
 
         if mat.texture_groups and texture_group_index >= 0:
@@ -377,7 +378,7 @@ class XfbinMaterialPropertyPanel(Panel):
         obj = context.object
         data: ClumpPropertyGroup = obj.xfbin_clump_data
 
-        draw_xfbin_list(layout, data, f'xfbin_clump_data', 'materials', 'material_index')
+        draw_xfbin_list(layout, 3, data, f'xfbin_clump_data', 'materials', 'material_index')
         material_index = data.material_index
 
         if data.materials and material_index >= 0:
@@ -410,7 +411,7 @@ class ClumpModelGroupPropertyPanel(Panel):
         obj = context.object
         data: ClumpPropertyGroup = obj.xfbin_clump_data
 
-        draw_xfbin_list(layout, data, f'xfbin_clump_data', 'model_groups', 'model_group_index')
+        draw_xfbin_list(layout, 1, data, f'xfbin_clump_data', 'model_groups', 'model_group_index')
         index = data.model_group_index
 
         if data.model_groups and index >= 0:
@@ -424,7 +425,7 @@ class ClumpModelGroupPropertyPanel(Panel):
             box.prop(group, 'unk')
 
             box.label(text='Models')
-            draw_xfbin_list(box, group, f'xfbin_clump_data.model_groups[{index}]', 'models', 'model_index')
+            draw_xfbin_list(box, 2, group, f'xfbin_clump_data.model_groups[{index}]', 'models', 'model_index')
             model_index = group.model_index
 
             if group.models and model_index >= 0:
@@ -460,7 +461,7 @@ class ClumpPropertyPanel(Panel):
         layout.prop(data, 'path')
 
         layout.label(text='Models')
-        draw_xfbin_list(layout, data, f'xfbin_clump_data', 'models', 'model_index')
+        draw_xfbin_list(layout, 0, data, f'xfbin_clump_data', 'models', 'model_index')
         model_index = data.model_index
 
         if data.models and model_index >= 0:
