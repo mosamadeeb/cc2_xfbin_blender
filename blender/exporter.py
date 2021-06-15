@@ -71,7 +71,7 @@ class ExportXfbin(Operator, ExportHelper):
 
     collection: EnumProperty(
         items=collection_callback,
-        name='Collection to Export',
+        name='Collection',
         description='The collection to be exported. All armatures in the collection will be converted and put in the same XFBIN',
         update=collection_update,
     )
@@ -101,9 +101,9 @@ class ExportXfbin(Operator, ExportHelper):
     )
 
     export_textures: BoolProperty(
-        name='Export materials',
-        description='If True, will export the materials in the collection to the XFBIN.\n'
-        'If False, will NOT update the materials of each clump in the XFBIN.\n\n'
+        name='Export textures',
+        description='If True, will export the textures referenced in the Clump properties\' materials to the XFBIN.\n'
+        'If False, will NOT export any textures, and will reuse the textures from the existing XFBIN.\n\n'
         'NOTE: "Inject to existing XFBIN" has to be enabled for this option to take effect',
         default=False,
     )
@@ -111,7 +111,8 @@ class ExportXfbin(Operator, ExportHelper):
     export_specific_meshes: BoolProperty(
         name='Export specific meshes',
         description='If True, will export only the selected (NUD) models in the box below.\n'
-        'If False, will export all models in the collection.\n\n',
+        'If "Inject to existing XFBIN" is also enabled, the existing models will be used instead of the non-exported models.\n'
+        'If False, will export all models in the collection',
         default=False,
     )
 
@@ -340,7 +341,8 @@ class XfbinExporter:
         }
 
         # Get a list of all models in from the old clump
-        old_clump_all_models = list(dict.fromkeys(chain(old_clump.model_chunks, *old_clump.model_groups)))
+        old_clump_all_models = list(dict.fromkeys(
+            chain(old_clump.model_chunks, *old_clump.model_groups))) if old_clump else None
 
         for empty in empties:
             if self.export_specific_meshes:
@@ -350,9 +352,10 @@ class XfbinExporter:
                     continue
 
                 if self.meshes_to_export[mesh_index].value is False:
-                    old_model = [c for c in old_clump_all_models if c and c.name == empty.name]
-                    if old_model:
-                        model_chunks.append(old_model[0])
+                    if old_clump:
+                        old_model = [c for c in old_clump_all_models if c and c.name == empty.name]
+                        if old_model:
+                            model_chunks.append(old_model[0])
                     continue
 
             nud_data: NudPropertyGroup = empty.xfbin_nud_data
