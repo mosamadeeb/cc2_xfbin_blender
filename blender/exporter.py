@@ -1,3 +1,4 @@
+import os
 from functools import reduce
 from itertools import chain
 from os import path
@@ -32,6 +33,7 @@ from .panels.clump_panel import (ClumpModelGroupPropertyGroup,
                                  ClumpPropertyGroup,
                                  XfbinMaterialPropertyGroup,
                                  XfbinNutTexturePropertyGroup,
+                                 XfbinTextureChunkPropertyGroup,
                                  XfbinTextureGroupPropertyGroup)
 from .panels.common import BoolPropertyGroup
 from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
@@ -102,10 +104,10 @@ class ExportXfbin(Operator, ExportHelper):
 
     export_textures: BoolProperty(
         name='Export textures',
-        description='If True, will export the textures referenced in the Clump properties\' materials to the XFBIN.\n'
+        description='If True, will include the NUT textures provided in the Clump properties\' "Texture Chunks" panel to the XFBIN.\n'
         'If False, will NOT export any textures, and will reuse the textures from the existing XFBIN.\n\n'
         'NOTE: "Inject to existing XFBIN" has to be enabled for this option to take effect',
-        default=False,
+        default=True,
     )
 
     export_specific_meshes: BoolProperty(
@@ -139,9 +141,7 @@ class ExportXfbin(Operator, ExportHelper):
         bone_row.prop(self, 'export_bones')
         bone_row.enabled = False
 
-        mat_row = layout.row()
-        mat_row.prop(self, 'export_textures')
-        mat_row.enabled = False
+        layout.prop(self, 'export_textures')
 
         layout.prop(self, 'export_specific_meshes')
 
@@ -207,6 +207,23 @@ class XfbinExporter:
             self.export_meshes = self.export_bones = self.export_textures = True
 
         for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
+            # Try adding each texture chunk as a page, if its path exists
+            for texture_chunk in armature_obj.xfbin_clump_data.texture_chunks:
+                if texture_chunk.include and texture_chunk.nut_path and os.path.isfile(texture_chunk.nut_path):
+                    texture_chunk: XfbinTextureChunkPropertyGroup
+
+                    chunk = NuccChunkTexture(texture_chunk.path, texture_chunk.texture_name)
+                    with open(texture_chunk.nut_path, 'rb') as f:
+                        chunk.nut_data = f.read()
+
+                    # Sanity check
+                    if not (len(chunk.nut_data) > 4 and chunk.nut_data[:4] == b'NTP3'):
+                        print(
+                            f'[NUT] Path for {texture_chunk.texture_name} is not a valid NUT file and will be skipped.')
+                        continue
+
+                    self.xfbin.add_chunk_page(chunk)
+
             self.xfbin.add_clump_page(self.make_clump(armature_obj, context))
 
         # Write the xfbin
@@ -597,10 +614,12 @@ class XfbinExporter:
             g.texture_chunks = list()
             for texture in group.textures:
                 texture: XfbinNutTexturePropertyGroup
-                t = NuccChunkTexture(texture.path, texture.texture)
+                t = NuccChunkTexture(texture.path, texture.texture_name)
 
                 if self.export_textures:
                     # TODO: Export textures
+                    # Might want to merge XfbinTextureChunkPropertyGroup with XfbinNutTexturePropertyGroup
+                    # when adding support for texture exporting
                     pass
 
                 g.texture_chunks.append(t)
