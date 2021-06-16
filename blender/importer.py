@@ -5,7 +5,7 @@ import bmesh
 import bpy
 from bmesh.types import BMesh
 from bpy.props import BoolProperty, StringProperty
-from bpy.types import Bone, Operator
+from bpy.types import Bone, Material, Object, Operator
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
@@ -15,6 +15,7 @@ from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
+from .panels.clump_panel import XfbinMaterialPropertyGroup
 
 
 class ImportXFBIN(Operator, ImportHelper):
@@ -77,7 +78,7 @@ class XfbinImporter:
 
             armature_obj = self.make_armature(clump, context)
             self.make_objects(clump, armature_obj, context)
-            
+
             # Set the armature as the active object after importing everything
             bpy.ops.object.mode_set(mode='OBJECT')
             context.view_layer.objects.active = armature_obj
@@ -159,7 +160,7 @@ class XfbinImporter:
 
         return armature_obj
 
-    def make_objects(self, clump: NuccChunkClump, armature_obj, context):
+    def make_objects(self, clump: NuccChunkClump, armature_obj: Object, context):
         vertex_group_list = [coord.node.name for coord in clump.coord_chunks]
         vertex_group_indices = {
             name: i
@@ -170,6 +171,12 @@ class XfbinImporter:
         clump_name = clump.name
         if clump_name.endswith('_f'):
             clump_name = clump_name[:-2]
+
+        # Create a blender material for each xfbin material chunk
+        xfbin_material_dict = {
+            name: mat
+            for name, mat in map(lambda x: (x.name, self.make_material(x)), armature_obj.xfbin_clump_data.materials)
+        }
 
         all_model_chunks = list(dict.fromkeys(
             chain(clump.model_chunks, *map(lambda x: x.model_chunks, clump.model_groups))))
@@ -199,13 +206,6 @@ class XfbinImporter:
                     mat_chunk = nucc_model.material_chunks[i]
                     mat_name = mat_chunk.name
 
-                    # Check if the material chunk for this mesh has not been loaded before
-                    if xfbin_node_groups.get(mat_chunk) is None:
-                        xfbin_node_groups[mat_chunk] = self.make_xfbin_node_group(mat_chunk)
-
-                    # Make a NUD material for this mesh, using the XFBIN material
-                    nud_materials[mesh] = self.make_nud_material(mesh, xfbin_node_groups.get(mat_chunk))
-
                     # Try to shorten the material name before adding it to the mesh name
                     if (not self.use_full_material_names) and mat_name.startswith(clump_name):
                         mat_name = mat_name[len(clump_name):].strip(' _')
@@ -229,6 +229,9 @@ class XfbinImporter:
                     overall_mesh.normals_split_custom_set_from_vertices(custom_normals)
                     overall_mesh.auto_smooth_angle = 0
                     overall_mesh.use_auto_smooth = True
+
+                    # Add the xfbin material to the mesh
+                    overall_mesh.materials.append(xfbin_material_dict.get(mat_chunk.name))
 
                     mesh_obj: bpy.types.Object = bpy.data.objects.new(mesh_name, overall_mesh)
 
@@ -264,6 +267,32 @@ class XfbinImporter:
                         # If we're not going to parent it, transform the mesh by the bone's matrix
                         empty.matrix_world = mesh_bone.matrix_local.to_4x4()
 
+    def make_material(self, xfbin_mat: XfbinMaterialPropertyGroup) -> Material:
+        material: Material = bpy.data.materials.new(f'[XFBIN] {xfbin_mat.name}')
+
+        if xfbin_mat.texture_groups and xfbin_mat.texture_groups[0].textures:
+            image_name = xfbin_mat.texture_groups[0].textures[0].texture
+
+            material.use_nodes = True
+            bsdf_node = material.node_tree.nodes.get('Principled BSDF')
+
+            image_node = material.node_tree.nodes.new('ShaderNodeTexImage')
+            image_node.location = (-300, 220)
+
+            # Try different name variations because blender loads external images with their extension
+            for name in (image_name, f'{image_name}.dds', f'{image_name}.png'):
+                image_node.image = bpy.data.images.get(name)
+
+                if image_node.image is not None:
+                    # If the image exists, link it to the material
+                    material.node_tree.links.new(image_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+                    break
+
+            # Remove the image node if we couldn't find the texture
+            if image_node.image is None:
+                material.node_tree.nodes.remove(image_node)
+
+        return material
 
     def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, used_bones, custom_normals) -> BMesh:
         bm = bmesh.new()
