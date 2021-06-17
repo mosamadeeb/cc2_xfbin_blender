@@ -212,7 +212,8 @@ class XfbinImporter:
 
                     # Add the material name to the group name because we don't have a way
                     # to differentiate between meshes in the same group
-                    mesh_name = f'{group.name} [{mat_name}]' if len(mat_name) else group.name
+                    # The order of the mesh might matter, so the index is added here regardless
+                    mesh_name = f'{group.name} ({i+1}) [{mat_name}]' if len(mat_name) else group.name
 
                     overall_mesh = bpy.data.meshes.new(mesh_name)
 

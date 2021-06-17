@@ -270,34 +270,26 @@ class XfbinExporter:
             for mat in clump_data.materials:
                 xfbin_mats[mat.material_name] = self.make_xfbin_material(mat, clump, context)
 
-            # Create the model chunks
-            model_chunks = self.make_models(empties, clump, old_clump, xfbin_mats, context)
+            # Create the model chunks as a dict to make it easier to preserve order
+            model_chunks = {m.name: m for m in self.make_models(empties, clump, old_clump, xfbin_mats, context)}
 
             # Set the model chunks and model groups based on the clump data
-            clump_models = list(map(lambda x: x.value, clump_data.models))
-            clump.model_chunks = [c for c in model_chunks if c.name in clump_models]
+            clump.model_chunks = [model_chunks[c.value] for c in clump_data.models if c.value in model_chunks]
+
+            # Add a None reference for model groups that might use it
+            # Hopefully no actual models have that name...
+            model_chunks['None'] = None
 
             # Add the model groups from the clump data
             clump.model_groups = list()
             for group in clump_data.model_groups:
                 group: ClumpModelGroupPropertyGroup
-                group_models = list(map(lambda x: x.value, group.models))
                 g = ClumpModelGroup()
 
                 g.flag0 = group.flag0
                 g.flag1 = group.flag1
                 g.unk = hex_str_to_int(group.unk)
-
-                g.model_chunks = list()
-                for name in group_models:
-                    if name == 'None':
-                        g.model_chunks.append(None)
-                        continue
-
-                    # A bit slow but needed to maintain the None references
-                    model = [c for c in model_chunks if c.name == name]
-                    if model:
-                        g.model_chunks.append(model[0])
+                g.model_chunks = [model_chunks[c.value] for c in group.models if c.value in model_chunks]
 
                 clump.model_groups.append(g)
         elif old_clump:
