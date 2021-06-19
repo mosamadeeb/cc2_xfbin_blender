@@ -137,9 +137,7 @@ class ExportXfbin(Operator, ExportHelper):
 
         layout.prop(self, 'export_meshes')
 
-        bone_row = layout.row()
-        bone_row.prop(self, 'export_bones')
-        bone_row.enabled = False
+        layout.prop(self, 'export_bones')
 
         layout.prop(self, 'export_textures')
 
@@ -232,6 +230,9 @@ class XfbinExporter:
     def make_clump(self, armature_obj: Object, context) -> NuccChunkClump:
         """Creates and returns a NuccChunkClump made from an Armature and its child meshes."""
 
+        # Set the armature as the active object to be able to get its edit bones
+        context.view_layer.objects.active = armature_obj
+
         armature: Armature = armature_obj.data
         empties: List[Mesh] = [obj for obj in armature_obj.children if obj.type == 'EMPTY']
 
@@ -305,7 +306,7 @@ class XfbinExporter:
 
         coords: List[NuccChunkCoord] = list()
 
-        def make_coord(bone: EditBone, coord_parent: CoordNode = None, parent_matrix: Matrix = Matrix.Identity(4)) -> NuccChunkCoord:
+        def make_coord(bone: EditBone, coord_parent: CoordNode = None, parent_matrix: Matrix = Matrix.Identity(4)):
             coord = NuccChunkCoord(clump.filePath, bone.name)
             coord.node = CoordNode(coord)
 
@@ -313,14 +314,26 @@ class XfbinExporter:
             node = coord.node
             node.parent = coord_parent
 
-            # Set the coordinates of the node
-            # TODO: Properly convert the coordinates
-            node.position = pos_m_to_cm((parent_matrix.inverted() @ bone.matrix).to_translation())
-            node.rotation = rot_from_blender((parent_matrix.inverted() @ bone.matrix).to_euler())
-            node.scale = pos_from_blender((parent_matrix.inverted() @ bone.matrix).to_scale())
+            local_matrix: Matrix = parent_matrix.inverted() @ bone.matrix
+            pos, _, sca = local_matrix.decompose()  # Rotation should be converted from the matrix directly
 
-            node.unkFloat = 1.0
-            node.unkShort = 0
+            # Apply the scale signs if they exist
+            scale_signs = bone.get('scale_signs')
+            if scale_signs is not None:
+                sca *= Vector(scale_signs)
+
+            # Set the coordinates of the node
+            node.position = pos_m_to_cm(pos)
+            node.rotation = rot_from_blender(local_matrix.to_euler('ZYX'))
+            node.scale = sca[:]
+
+            # Set the unknown values if they were imported
+            unk_float = bone.get('unk_float')
+            unk_short = bone.get('unk_short')
+            if unk_float is not None:
+                node.unkFloat = unk_float
+            if unk_short is not None:
+                node.unkShort = unk_short
 
             # Add the coord chunk to the list
             coords.append(coord)

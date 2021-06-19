@@ -126,29 +126,34 @@ class XfbinImporter:
             else:
                 parent_matrix = Matrix.Identity(4)
 
+            # Convert the node values
             pos = pos_cm_to_m(node.position)
             rot = rot_to_blender(node.rotation)
+            sca = Vector(tuple(map(lambda x: abs(x), node.scale)))  # Absolute value of the scale
 
-            this_bone_matrix = rot.to_matrix().to_4x4()
-            this_bone_matrix.invert()
-            this_bone_matrix = this_bone_matrix @ Matrix.Diagonal(Vector(node.scale).xyz).to_4x4()
-            this_bone_matrix = parent_matrix @ (Matrix.Translation(Vector(pos).xyz) @ this_bone_matrix)
+            # Set up the transformation matrix
+            this_bone_matrix = parent_matrix @ (Matrix.Translation(pos) @
+                                                rot.to_matrix().to_4x4() @ Matrix.Diagonal(sca).to_4x4())
 
-            # Remove scale from matrix before inserting into the dictionary
-            # TODO: Should bones really have scale, or is it only used for setting up the skeleton? Needs in-game testing
-            bone_matrices[node.name] = this_bone_matrix @ Matrix.Diagonal(Vector(node.scale).xyz).to_4x4().inverted()
+            # Add the matrix to the dictionary
+            bone_matrices[node.name] = this_bone_matrix
 
             bone = armature.edit_bones.new(node.name)
             bone.use_relative_parent = False
-            bone.inherit_scale = 'NONE'  # TODO: is this correct?
             bone.use_deform = True
 
-            bone.head = this_bone_matrix @ Vector((0, 0, 0))
-
             # Having a long tail would offset the meshes parented to the mesh bones, so we avoid that for now
-            bone.tail = this_bone_matrix @ Vector((0, 0, 0.0001))
+            bone.tail = Vector((0, 0.0001, 0))
 
+            bone.matrix = this_bone_matrix
             bone.parent = armature.edit_bones[node.parent.name] if node.parent else None
+
+            # Store the signs of the node's scale to apply when exporting, as applying them here (if negative) will break the rotation
+            bone['scale_signs'] = tuple(map(lambda x: -1 if x < 0 else 1, node.scale))
+            
+            # Store these unknown values to set when exporting
+            bone['unk_float'] = node.unkFloat
+            bone['unk_short'] = node.unkShort
 
             for child in node.children:
                 make_bone(child)

@@ -15,7 +15,7 @@ def pos_cm_to_m_tuple(pos: Tuple[float]) -> Tuple[float]:
 
 
 def pos_to_blender(pos) -> Vector:
-    return Vector((pos[0], pos[2], -pos[1]))
+    return Vector(pos)
 
 
 def pos_scaled_to_blender(pos) -> Vector:
@@ -23,7 +23,7 @@ def pos_scaled_to_blender(pos) -> Vector:
 
 
 def rot_to_blender(rot):
-    return Euler(tuple(map(lambda x: -math.radians(x), rot)))
+    return Euler(tuple(map(lambda x: math.radians(x), rot)), 'ZYX')
 
 
 def uv_to_blender(uv):
@@ -32,7 +32,7 @@ def uv_to_blender(uv):
 
 def pos_m_to_cm(pos: Vector) -> Tuple[float, float, float]:
     # From meter to centimeter
-    return (pos * 100).xyz
+    return (pos * 100)[:]
 
 
 def pos_m_to_cm_tuple(pos: Tuple[float]) -> Tuple[float]:
@@ -41,7 +41,7 @@ def pos_m_to_cm_tuple(pos: Tuple[float]) -> Tuple[float]:
 
 
 def pos_from_blender(pos: Vector) -> Tuple[float, float, float]:
-    return (pos.x, -pos.z, pos.y)
+    return pos[:]
 
 
 def pos_scaled_from_blender(pos: Vector) -> Tuple[float, float, float]:
@@ -49,7 +49,7 @@ def pos_scaled_from_blender(pos: Vector) -> Tuple[float, float, float]:
 
 
 def rot_from_blender(rot: Euler) -> Tuple[float, float, float]:
-    return (-math.degrees(rot.x), -math.degrees(rot.y), -math.degrees(rot.z))
+    return tuple(map(lambda x: math.degrees(x), rot))
 
 
 def uv_from_blender(uv):
