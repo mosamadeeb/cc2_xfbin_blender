@@ -474,28 +474,31 @@ class XfbinExporter:
                             if uv_layer2:
                                 vert.uv.append(uv_from_blender(l[uv_layer2].uv))
 
-                            # Bone indices and weights
-                            # Direct copy of TheTurboTurnip's weight sorting method
-                            # https://github.com/theturboturnip/yk_gmd_io/blob/master/yk_gmd_blender/blender/export/legacy/exporter.py#L302-L316
+                            vert.bone_ids = tuple()
+                            vert.bone_weights = tuple()
+                            if deform_layer:
+                                # Bone indices and weights
+                                # Direct copy of TheTurboTurnip's weight sorting method
+                                # https://github.com/theturboturnip/yk_gmd_io/blob/master/yk_gmd_blender/blender/export/legacy/exporter.py#L302-L316
 
-                            # Get a list of (vertex group ID, weight) items sorted in descending order of weight
-                            # Take the top 4 elements, for the top 4 most deforming bones
-                            # Normalize the weights so they sum to 1
-                            b_weights = [(v_groups[b].name, w) for b, w in sorted(l.vert[deform_layer].items(),
-                                                                                  key=lambda i: 1 - i[1]) if v_groups[b].name in coord_indices_dict]
-                            if len(b_weights) > 4:
-                                b_weights = b_weights[:4]
-                            elif len(b_weights) < 4:
-                                # Add zeroed elements to b_weights so it's 4 elements long
-                                b_weights += [(0, 0.0)] * (4 - len(b_weights))
+                                # Get a list of (vertex group ID, weight) items sorted in descending order of weight
+                                # Take the top 4 elements, for the top 4 most deforming bones
+                                # Normalize the weights so they sum to 1
+                                b_weights = [(v_groups[b].name, w) for b, w in sorted(l.vert[deform_layer].items(),
+                                                                                    key=lambda i: 1 - i[1]) if v_groups[b].name in coord_indices_dict]
+                                if len(b_weights) > 4:
+                                    b_weights = b_weights[:4]
+                                elif len(b_weights) < 4:
+                                    # Add zeroed elements to b_weights so it's 4 elements long
+                                    b_weights += [(0, 0.0)] * (4 - len(b_weights))
 
-                            weight_sum = sum(weight for (_, weight) in b_weights)
-                            if weight_sum > 0.0:
-                                vert.bone_ids = tuple(map(lambda bw: coord_indices_dict.get(bw[0], 0), b_weights))
-                                vert.bone_weights = tuple(map(lambda bw: bw[1] / weight_sum, b_weights))
-                            else:
-                                vert.bone_ids = [0] * 4
-                                vert.bone_weights = [0] * 3 + [1]
+                                weight_sum = sum(weight for (_, weight) in b_weights)
+                                if weight_sum > 0.0:
+                                    vert.bone_ids = tuple(map(lambda bw: coord_indices_dict.get(bw[0], 0), b_weights))
+                                    vert.bone_weights = tuple(map(lambda bw: bw[1] / weight_sum, b_weights))
+                                else:
+                                    vert.bone_ids = [0] * 4
+                                    vert.bone_weights = [0] * 3 + [1]
 
                     # Get the vertex indices to make the face
                     faces.append(tuple(map(lambda l: vertex_indices_dict[l.vert.index], tri_loops)))
