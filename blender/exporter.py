@@ -18,8 +18,8 @@ from ..xfbin_lib.xfbin.structure.nucc import (ClumpModelGroup, CoordNode,
                                               MaterialTextureGroup,
                                               NuccChunkClump, NuccChunkCoord,
                                               NuccChunkMaterial,
-                                              NuccChunkModel, NuccChunkTexture,
-                                              RiggingFlag)
+                                              NuccChunkModel, NuccChunkNull,
+                                              NuccChunkTexture, RiggingFlag)
 from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMaterial,
                                              NudMaterialProperty,
                                              NudMaterialTexture, NudMesh,
@@ -464,7 +464,7 @@ class XfbinExporter:
             chunk.clump_chunk = clump
 
             # TODO: Add support for importing/exporting NuccChunkModelHit
-            chunk.hit_chunk = None
+            chunk.hit_chunk = NuccChunkNull()
 
             # Get the index of the mesh bone of this model
             chunk.coord_chunk = None
