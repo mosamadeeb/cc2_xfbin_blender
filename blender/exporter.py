@@ -110,6 +110,16 @@ class ExportXfbin(Operator, ExportHelper):
         default=True,
     )
 
+    inject_to_clump: BoolProperty(
+        name='Inject to existing Clump',
+        description='If True, will ONLY overwrite existing models/bones in the clumps of the existing XFBIN.\n'
+        'If False, will rebuild the clumps instead of copying their contents.\n'
+        'Should be used whenever rebuilding an XFBIN results in undesired behavior.\n\n'
+        'NOTE: The "Clump Properties" of each armature will be ignored if this option is enabled.\n'
+        'NOTE: "Inject to existing XFBIN" has to be enabled for this option to take effect',
+        default=False,
+    )
+
     export_specific_meshes: BoolProperty(
         name='Export specific meshes',
         description='If True, will export only the selected (NUD) models in the box below.\n'
@@ -140,6 +150,8 @@ class ExportXfbin(Operator, ExportHelper):
         layout.prop(self, 'export_bones')
 
         layout.prop(self, 'export_textures')
+
+        layout.prop(self, 'inject_to_clump')
 
         layout.prop(self, 'export_specific_meshes')
 
@@ -190,6 +202,7 @@ class XfbinExporter:
         self.export_meshes = export_settings.get('export_meshes')
         self.export_bones = export_settings.get('export_bones')
         self.export_textures = export_settings.get('export_textures')
+        self.inject_to_clump = export_settings.get('inject_to_clump')
         self.export_specific_meshes = export_settings.get('export_specific_meshes')
         self.meshes_to_export = export_settings.get('meshes_to_export')
 
@@ -204,6 +217,7 @@ class XfbinExporter:
             self.xfbin = read_xfbin(self.filepath)
         else:
             self.export_meshes = self.export_bones = self.export_textures = True
+            self.inject_to_clump = False
 
         for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
             # Try adding each texture chunk as a page, if its path exists
@@ -224,7 +238,54 @@ class XfbinExporter:
 
                         self.xfbin.add_chunk_page(chunk)
 
-            self.xfbin.add_clump_page(self.make_clump(armature_obj, context))
+            # Create a NuccChunkClump from the armature
+            clump = self.make_clump(armature_obj, context)
+
+            if not self.inject_to_clump:
+                self.xfbin.add_clump_page(clump)
+            else:
+                # Try to get the clump in the existing xfbin
+                old_clump = self.xfbin.get_chunk_page(clump)
+
+                if old_clump:
+                    # There should be only 1 clump per page anyway
+                    old_clump: NuccChunkClump = old_clump[1].get_chunks_by_type(NuccChunkClump)[0]
+                else:
+                    self.operator.report(
+                        {'WARNING'}, f'{clump.name} was not found in the existing XFBIN and will be skipped.')
+                    continue
+
+                clump_coords = {c.name: c for c in clump.coord_chunks}
+                clump_models = {c.name: c for c in clump.model_chunks}
+
+                # Copy the coords
+                for coord in old_clump.coord_chunks:
+                    new_coord = clump_coords.get(coord.node.name)
+                    if new_coord is not None:
+                        coord.node.copy_from(new_coord.node)
+
+                # Copy the models
+                for model in old_clump.model_chunks:
+                    new_model = clump_models.get(model.name)
+                    if new_model is not None:
+                        model.copy_from(new_model)
+
+                # Copy the model groups
+                for i, group in enumerate(old_clump.model_groups):
+                    if i >= len(clump.model_groups):
+                        break
+
+                    new_group = clump.model_groups[i]
+                    new_group_models = {c.name: c for c in new_group.model_chunks}
+
+                    group.flag0 = new_group.flag0
+                    group.flag1 = new_group.flag1
+                    group.unk = new_group.unk
+
+                    for model in group.model_chunks:
+                        new_model = new_group_models.get(model.name)
+                        if new_model is not None:
+                            model.copy_from(new_model)
 
         # Write the xfbin
         write_xfbin_to_path(self.xfbin, self.filepath)
@@ -388,7 +449,11 @@ class XfbinExporter:
             chunk = NuccChunkModel(clump.filePath, empty.name)
             chunk.clump_chunk = clump
 
+            # TODO: Add support for importing/exporting NuccChunkModelHit
+            chunk.hit_chunk = None
+
             # Get the index of the mesh bone of this model
+            chunk.coord_chunk = None
             chunk.coord_index = coord_indices_dict.get(nud_data.mesh_bone, 0)
 
             chunk.material_chunks = list()
