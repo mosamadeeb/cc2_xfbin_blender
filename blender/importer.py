@@ -42,7 +42,7 @@ class ImportXFBIN(Operator, ImportHelper):
 
         # try:
         start_time = time.time()
-        importer = XfbinImporter(self.filepath, self.as_keywords(ignore=("filter_glob",)))
+        importer = XfbinImporter(self, self.filepath, self.as_keywords(ignore=("filter_glob",)))
 
         importer.read(context)
 
@@ -57,7 +57,8 @@ class ImportXFBIN(Operator, ImportHelper):
 
 
 class XfbinImporter:
-    def __init__(self, filepath, import_settings):
+    def __init__(self, operator: Operator, filepath: str, import_settings):
+        self.operator = operator
         self.filepath = filepath
         self.use_full_material_names = import_settings.get("use_full_material_names")
 
@@ -75,6 +76,10 @@ class XfbinImporter:
                 continue
 
             clump: NuccChunkClump = clump[0]
+
+            # Clear unsupported chunks to avoid issues
+            if clump.clear_non_model_chunks() > 0:
+                self.operator.report({'WARNING'}, f'Some chunks in {clump.name} have unsupported types and will not be imported')
 
             armature_obj = self.make_armature(clump, context)
             self.make_objects(clump, armature_obj, context)
