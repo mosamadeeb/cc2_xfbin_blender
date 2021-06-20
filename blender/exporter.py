@@ -238,7 +238,8 @@ class XfbinExporter:
 
         clump_data: ClumpPropertyGroup = armature_obj.xfbin_clump_data
 
-        clump = NuccChunkClump(clump_data.path, armature.name)
+        # Remove the added " [C]" from the clump's name if it exists
+        clump = NuccChunkClump(clump_data.path, armature.name[:-4] if armature.name.endswith(' [C]') else armature.name)
         old_clump = None
 
         # Get the clump data properties

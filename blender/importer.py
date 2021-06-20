@@ -105,7 +105,7 @@ class XfbinImporter:
         return collection
 
     def make_armature(self, clump: NuccChunkClump, context):
-        armature_name = clump.name
+        armature_name = f'{clump.name} [C]'  # Avoid blender renaming meshes by making the armature name unique
 
         armature = bpy.data.armatures.new(f"{armature_name}")
         armature.display_type = 'STICK'
