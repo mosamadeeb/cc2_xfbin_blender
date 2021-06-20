@@ -206,21 +206,22 @@ class XfbinExporter:
 
         for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
             # Try adding each texture chunk as a page, if its path exists
-            for texture_chunk in armature_obj.xfbin_clump_data.texture_chunks:
-                if texture_chunk.include and texture_chunk.nut_path and os.path.isfile(texture_chunk.nut_path):
-                    texture_chunk: XfbinTextureChunkPropertyGroup
+            if self.export_textures:
+                for texture_chunk in armature_obj.xfbin_clump_data.texture_chunks:
+                    if texture_chunk.include and texture_chunk.nut_path and os.path.isfile(texture_chunk.nut_path):
+                        texture_chunk: XfbinTextureChunkPropertyGroup
 
-                    chunk = NuccChunkTexture(texture_chunk.path, texture_chunk.texture_name)
-                    with open(texture_chunk.nut_path, 'rb') as f:
-                        chunk.nut_data = f.read()
+                        chunk = NuccChunkTexture(texture_chunk.path, texture_chunk.texture_name)
+                        with open(texture_chunk.nut_path, 'rb') as f:
+                            chunk.nut_data = f.read()
 
-                    # Sanity check
-                    if not (len(chunk.nut_data) > 4 and chunk.nut_data[:4] == b'NTP3'):
-                        print(
-                            f'[NUT] Path for {texture_chunk.texture_name} is not a valid NUT file and will be skipped.')
-                        continue
+                        # Sanity check
+                        if not (len(chunk.nut_data) > 4 and chunk.nut_data[:4] == b'NTP3'):
+                            print(
+                                f'[NUT] Path for {texture_chunk.texture_name} is not a valid NUT file and will be skipped.')
+                            continue
 
-                    self.xfbin.add_chunk_page(chunk)
+                        self.xfbin.add_chunk_page(chunk)
 
             self.xfbin.add_clump_page(self.make_clump(armature_obj, context))
 
