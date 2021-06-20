@@ -1,5 +1,6 @@
 import os
 from itertools import chain
+from typing import List
 
 import bmesh
 import bpy
@@ -10,11 +11,12 @@ from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
 from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
-                                              NuccChunkModel)
+                                              NuccChunkModel, NuccChunkTexture)
 from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
+from .common.helpers import XFBIN_TEXTURES_OBJ
 from .panels.clump_panel import XfbinMaterialPropertyGroup
 
 
@@ -69,7 +71,12 @@ class XfbinImporter:
         self.xfbin = read_xfbin(self.filepath)
         self.collection = self.make_collection(context)
 
+        texture_chunks: List[NuccChunkTexture] = list()
+
         for page in self.xfbin.pages:
+            # Add all texture chunks inside the xfbin
+            texture_chunks.extend(page.get_chunks_by_type('nuccChunkTexture'))
+
             clump = page.get_chunks_by_type('nuccChunkClump')
 
             if not len(clump):
@@ -79,7 +86,8 @@ class XfbinImporter:
 
             # Clear unsupported chunks to avoid issues
             if clump.clear_non_model_chunks() > 0:
-                self.operator.report({'WARNING'}, f'Some chunks in {clump.name} have unsupported types and will not be imported')
+                self.operator.report(
+                    {'WARNING'}, f'Some chunks in {clump.name} have unsupported types and will not be imported')
 
             armature_obj = self.make_armature(clump, context)
             self.make_objects(clump, armature_obj, context)
@@ -90,6 +98,16 @@ class XfbinImporter:
 
             # Update the models' PointerProperty to use the models that were just imported
             armature_obj.xfbin_clump_data.update_models(armature_obj)
+
+        # Create an empty object to store the texture chunks list
+        empty = bpy.data.objects.new(XFBIN_TEXTURES_OBJ, None)
+        empty.empty_display_size = 0
+
+        # Link the empty to the collection
+        self.collection.objects.link(empty)
+
+        # Add the found texture chunks to the empty object
+        empty.xfbin_texture_chunks_data.init_data(texture_chunks)
 
     def make_collection(self, context) -> bpy.types.Collection:
         """

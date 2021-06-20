@@ -28,12 +28,11 @@ from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
-from .common.helpers import hex_str_to_int
+from .common.helpers import XFBIN_TEXTURES_OBJ, hex_str_to_int
 from .panels.clump_panel import (ClumpModelGroupPropertyGroup,
                                  ClumpPropertyGroup,
                                  XfbinMaterialPropertyGroup,
                                  XfbinNutTexturePropertyGroup,
-                                 XfbinTextureChunkPropertyGroup,
                                  XfbinTextureGroupPropertyGroup)
 from .panels.common import BoolPropertyGroup
 from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
@@ -41,6 +40,8 @@ from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
                                     NudMaterialTexturePropertyGroup,
                                     NudMeshPropertyGroup)
 from .panels.nud_panel import NudPropertyGroup
+from .panels.texture_chunks_panel import (TextureChunksListPropertyGroup,
+                                          XfbinTextureChunkPropertyGroup)
 
 
 class ExportXfbin(Operator, ExportHelper):
@@ -219,10 +220,18 @@ class XfbinExporter:
             self.export_meshes = self.export_bones = self.export_textures = True
             self.inject_to_clump = False
 
-        for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
-            # Try adding each texture chunk as a page, if its path exists
-            if self.export_textures:
-                for texture_chunk in armature_obj.xfbin_clump_data.texture_chunks:
+        # Export textures
+        if self.export_textures:
+            texture_chunks_obj = self.collection.objects.get(XFBIN_TEXTURES_OBJ)
+
+            if not texture_chunks_obj:
+                self.operator.report(
+                    {'WARNING'}, f'Could not export textures. Make sure that the "{XFBIN_TEXTURES_OBJ}" object is inside the collection.')
+            else:
+                texture_chunks_data: TextureChunksListPropertyGroup = texture_chunks_obj.xfbin_texture_chunks_data
+
+                # Try adding each texture chunk as a page, if its path exists
+                for texture_chunk in texture_chunks_data.texture_chunks:
                     if texture_chunk.include and texture_chunk.nut_path and os.path.isfile(texture_chunk.nut_path):
                         texture_chunk: XfbinTextureChunkPropertyGroup
 
@@ -238,6 +247,8 @@ class XfbinExporter:
 
                         self.xfbin.add_chunk_page(chunk)
 
+        # Export clumps
+        for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
             # Create a NuccChunkClump from the armature
             clump = self.make_clump(armature_obj, context)
 
@@ -327,8 +338,10 @@ class XfbinExporter:
         elif old_clump:
             clump.coord_chunks = old_clump.coord_chunks
         else:
-            raise Exception('Cannot export bones.')
+            self.operator.report({'ERROR_INVALID_INPUT'}, 'Could not export bones. Please check the exporter options.')
+            raise Exception('Failed to export.')
 
+        # Export meshes
         if self.export_meshes:
             # Create the material chunks
             xfbin_mats = dict()
@@ -361,7 +374,8 @@ class XfbinExporter:
             clump.model_chunks = old_clump.model_chunks
             clump.model_groups = old_clump.model_groups
         else:
-            raise Exception('Cannot export meshes.')
+            self.operator.report({'ERROR_INVALID_INPUT'}, 'Could not export meshes. Please check the exporter options.')
+            raise Exception('Failed to export.')
 
         return clump
 

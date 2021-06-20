@@ -186,51 +186,6 @@ class ClumpModelGroupPropertyGroup(PropertyGroup):
             m.value = model.name if model else 'None'
 
 
-# bpy.props don't support inheritance...
-# So this is mostly a copy of XfbinNutTexturePropertyGroup
-class XfbinTextureChunkPropertyGroup(PropertyGroup):
-    def update_texture_name(self, context):
-        self.update_name()
-
-    texture_name: StringProperty(
-        name='Texture Name',
-        default='new_texture',
-        update=update_texture_name,
-    )
-
-    path: StringProperty(
-        name='Chunk Path',
-        description='XFBIN chunk path that will be used for identifying the texture in the XFBIN.\n'
-        'Should be the same as the path of the texture in the XFBIN to inject to.\n'
-        'Example: "c/1nrt/tex/1nrtbody.nut"',
-    )
-
-    # TODO: Support exporting textures from blender
-    # texture: StringProperty(
-    #     name='Image Texture',
-    # )
-
-    def update_name(self):
-        self.name = self.texture_name
-
-    def init_data(self, chunk: NuccChunkTexture):
-        self.texture_name = chunk.name
-        self.path = chunk.filePath
-        self.texture = chunk.name
-
-    include: BoolProperty(
-        name='Include in XFBIN',
-        description='Repack the texture into the XFBIN when exporting.\n'
-        'This should be enabled for all textures that are specific to the XFBIN '
-        '(i.e. celshade/haching etc should not be included).\n\n'
-        'Note: The path to the texture in NUT format (.nut) must be provided',
-    )
-
-    nut_path: StringProperty(
-        name='NUT Path',
-    )
-
-
 class ClumpPropertyGroup(PropertyGroup):
     path: StringProperty(
         name='Chunk Path',
@@ -287,12 +242,6 @@ class ClumpPropertyGroup(PropertyGroup):
 
     material_index: IntProperty()
 
-    texture_chunks: CollectionProperty(
-        type=XfbinTextureChunkPropertyGroup,
-    )
-
-    texture_chunk_index: IntProperty()
-
     def init_data(self, clump: NuccChunkClump):
         self.path = clump.filePath
 
@@ -325,20 +274,11 @@ class ClumpPropertyGroup(PropertyGroup):
         # Get all unique material chunks
         material_chunks = list(dict.fromkeys(chain(*map(lambda x: x.material_chunks, all_model_chunks))))
 
-        # Get all unique texture chunks while iterating on materials
-        texture_chunks = dict()
-
         # Create a property group for each material
         self.materials.clear()
         for material in material_chunks:
-            texture_chunks.update(dict.fromkeys(chain(*material.texture_groups)))
             mat: XfbinMaterialPropertyGroup = self.materials.add()
             mat.init_data(material)
-
-        self.texture_chunks.clear()
-        for texture in texture_chunks:
-            t: XfbinTextureChunkPropertyGroup = self.texture_chunks.add()
-            t.init_data(texture)
 
     def update_models(self, obj: Object):
         empties = [c for c in obj.children if c.type == 'EMPTY']
@@ -498,72 +438,6 @@ class ClumpModelGroupPropertyPanel(Panel):
                                 text='Model Object', icon='OUTLINER_OB_EMPTY')
 
 
-class XFBIN_PANEL_OT_OpenNut(bpy.types.Operator):
-    """Open a NUT texture to include in the XFBIN"""
-    bl_idname = 'xfbin_panel.open_nut'
-    bl_label = 'Open NUT (*.nut)'
-
-    filepath: bpy.props.StringProperty(subtype='FILE_PATH')
-    filter_glob: StringProperty(default='*.nut', options={'HIDDEN'})
-
-    def execute(self, context):
-        data: ClumpPropertyGroup = context.object.xfbin_clump_data
-        chunks = data.texture_chunks
-        index = data.texture_chunk_index
-
-        if not chunks:
-            # Should not happen
-            return {'CANCELLED'}
-
-        chunks[index].nut_path = self.filepath
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-
-        return {'RUNNING_MODAL'}
-
-
-class XfbinTextureChunkPropertyPanel(Panel):
-    bl_idname = 'OBJECT_PT_xfbin_texture_chunk'
-    bl_parent_id = 'OBJECT_PT_xfbin_clump'
-    bl_label = 'Texture Chunks'
-
-    bl_space_type = 'PROPERTIES'
-    bl_context = 'object'
-    bl_region_type = 'WINDOW'
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def draw(self, context):
-        layout = self.layout
-        obj = context.object
-        data: ClumpPropertyGroup = obj.xfbin_clump_data
-
-        draw_xfbin_list(layout, 6, data, f'xfbin_clump_data', 'texture_chunks', 'texture_chunk_index')
-        index = data.texture_chunk_index
-
-        if data.texture_chunks and index >= 0:
-            texture_chunk: XfbinTextureChunkPropertyGroup = data.texture_chunks[index]
-            box = layout.box()
-
-            box.prop(texture_chunk, 'texture_name')
-            box.prop(texture_chunk, 'path')
-
-            box.prop(texture_chunk, 'include')
-
-            if texture_chunk.include:
-                # TODO: Select textures already loaded in blender instead of NUTs
-                # box.prop_search(texture_chunk, 'texture', bpy.data, 'images')
-
-                box.operator('xfbin_panel.open_nut', icon='FILEBROWSER')
-
-                if texture_chunk.nut_path:
-                    row = box.row()
-                    row.prop(texture_chunk, 'nut_path')
-                    row.enabled = False
-
-
 class ClumpPropertyPanel(Panel):
     """Panel that displays the ClumpPropertyPanel attached to the selected armature object."""
 
@@ -601,7 +475,6 @@ class ClumpPropertyPanel(Panel):
 
 clump_property_groups = (
     XfbinNutTexturePropertyGroup,
-    XfbinTextureChunkPropertyGroup,
     XfbinTextureGroupPropertyGroup,
     XfbinMaterialPropertyGroup,
     ClumpModelGroupPropertyGroup,
@@ -610,9 +483,7 @@ clump_property_groups = (
 
 clump_classes = (
     *clump_property_groups,
-    XFBIN_PANEL_OT_OpenNut,
     ClumpPropertyPanel,
-    XfbinTextureChunkPropertyPanel,
     ClumpModelGroupPropertyPanel,
     XfbinMaterialPropertyPanel,
     XfbinTextureGroupPropertyPanel,
