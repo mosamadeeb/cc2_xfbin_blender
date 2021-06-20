@@ -57,7 +57,7 @@ class ImportXFBIN(Operator, ImportHelper):
 
 
 class XfbinImporter:
-    def __init__(self, operator: Operator, filepath: str, import_settings):
+    def __init__(self, operator: Operator, filepath: str, import_settings: dict):
         self.operator = operator
         self.filepath = filepath
         self.use_full_material_names = import_settings.get("use_full_material_names")

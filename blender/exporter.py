@@ -167,7 +167,7 @@ class ExportXfbin(Operator, ExportHelper):
 
         # try:
         start_time = time.time()
-        exporter = XfbinExporter(self.filepath, self.as_keywords(ignore=('filter_glob',)))
+        exporter = XfbinExporter(self, self.filepath, self.as_keywords(ignore=('filter_glob',)))
         exporter.export_collection(context)
 
         elapsed_s = "{:.2f}s".format(time.time() - start_time)
@@ -180,17 +180,18 @@ class ExportXfbin(Operator, ExportHelper):
 
 
 class XfbinExporter:
-    def __init__(self, filepath, import_settings: dict):
+    def __init__(self, operator: Operator, filepath: str, export_settings: dict):
+        self.operator = operator
         self.filepath = filepath
-        self.collection: bpy.types.Collection = bpy.data.collections[import_settings.get('collection')]
+        self.collection: bpy.types.Collection = bpy.data.collections[export_settings.get('collection')]
 
-        self.inject_to_xfbin = import_settings.get('inject_to_xfbin')
+        self.inject_to_xfbin = export_settings.get('inject_to_xfbin')
 
-        self.export_meshes = import_settings.get('export_meshes')
-        self.export_bones = import_settings.get('export_bones')
-        self.export_textures = import_settings.get('export_textures')
-        self.export_specific_meshes = import_settings.get('export_specific_meshes')
-        self.meshes_to_export = import_settings.get('meshes_to_export')
+        self.export_meshes = export_settings.get('export_meshes')
+        self.export_bones = export_settings.get('export_bones')
+        self.export_textures = export_settings.get('export_textures')
+        self.export_specific_meshes = export_settings.get('export_specific_meshes')
+        self.meshes_to_export = export_settings.get('meshes_to_export')
 
     xfbin: Xfbin
 
@@ -217,8 +218,8 @@ class XfbinExporter:
 
                         # Sanity check
                         if not (len(chunk.nut_data) > 4 and chunk.nut_data[:4] == b'NTP3'):
-                            print(
-                                f'[NUT] Path for {texture_chunk.texture_name} is not a valid NUT file and will be skipped.')
+                            self.operator.report(
+                                {'WARNING'}, f'[NUT] Path for {texture_chunk.texture_name} is not a valid NUT file and will be skipped.')
                             continue
 
                         self.xfbin.add_chunk_page(chunk)
@@ -515,17 +516,18 @@ class XfbinExporter:
                     faces.append(tuple(map(lambda l: vertex_indices_dict[l.vert.index], tri_loops)))
 
                 if len(vertices) < 3:
-                    print(f'[NUD MESH] {mesh_obj.name} has no valid faces and will be skipped.')
+                    self.operator.report(
+                        {'WARNING'}, f'[NUD MESH] {mesh_obj.name} has no valid faces and will be skipped.')
                     continue
 
                 if len(vertices) > NudMesh.MAX_VERTICES:
-                    print(
-                        f'[NUD MESH] {mesh_obj.name} has {len(vertices)} vertices (limit is {NudMesh.MAX_VERTICES}) and will be skipped.')
+                    self.operator.report(
+                        {'WARNING'}, f'[NUD MESH] {mesh_obj.name} has {len(vertices)} vertices (limit is {NudMesh.MAX_VERTICES}) and will be skipped.')
                     continue
 
                 if len(faces) > NudMesh.MAX_FACES:
-                    print(
-                        f'[NUD MESH] {mesh_obj.name} has {len(bm.faces)} faces (limit is {NudMesh.MAX_FACES}) and will be skipped.')
+                    self.operator.report(
+                        {'WARNING'}, f'[NUD MESH] {mesh_obj.name} has {len(bm.faces)} faces (limit is {NudMesh.MAX_FACES}) and will be skipped.')
                     continue
 
                 mesh_data: NudMeshPropertyGroup = mesh_obj.xfbin_mesh_data
@@ -539,8 +541,8 @@ class XfbinExporter:
                 # Add the material chunk for this mesh
                 mat = xfbin_mats.get(mesh_data.xfbin_material)
                 if mat is None:
-                    print(
-                        f'[NUD MESH] {mesh_obj.name} has a non-existing XFBIN material and will be skipped.')
+                    self.operator.report(
+                        {'WARNING'}, f'[NUD MESH] {mesh_obj.name} has a non-existing XFBIN material and will be skipped.')
                     continue
 
                 chunk.material_chunks.append(mat)
@@ -555,7 +557,8 @@ class XfbinExporter:
                 bm.free()
 
             if not mesh_group.meshes:
-                print(f'[NUD] {empty.name} does not contain any exported meshes and will be skipped.')
+                self.operator.report(
+                    {'WARNING'}, f'[NUD] {empty.name} does not contain any exported meshes and will be skipped.')
                 continue
 
             # Only add the model chunk if its NUD contains at least one mesh
