@@ -414,6 +414,11 @@ class XfbinExporter:
 
             mesh_group.meshes = list()
 
+            # Get the armature's data
+            armature: Armature = empty.parent.data
+            mesh_bone = armature.bones.get(nud_data.mesh_bone)
+            empty_parent_type = empty.parent_type
+
             for mesh_obj in [c for c in empty.children if c.type == 'MESH']:
                 nud_mesh = NudMesh()
                 vertices = nud_mesh.vertices = list()
@@ -421,6 +426,10 @@ class XfbinExporter:
 
                 # Generate a mesh with modifiers applied, and put it into a bmesh
                 mesh = mesh_obj.evaluated_get(context.evaluated_depsgraph_get()).data
+
+                # Transform the mesh by the inverse of its bone's matrix, if it was not parented to it
+                if mesh_bone and empty_parent_type != 'BONE':
+                    mesh.transform(mesh_bone.matrix_local.to_4x4().inverted())
 
                 bm = bmesh.new()
                 bm.from_mesh(mesh)
@@ -485,7 +494,7 @@ class XfbinExporter:
                                 # Take the top 4 elements, for the top 4 most deforming bones
                                 # Normalize the weights so they sum to 1
                                 b_weights = [(v_groups[b].name, w) for b, w in sorted(l.vert[deform_layer].items(),
-                                                                                    key=lambda i: 1 - i[1]) if v_groups[b].name in coord_indices_dict]
+                                                                                      key=lambda i: 1 - i[1]) if v_groups[b].name in coord_indices_dict]
                                 if len(b_weights) > 4:
                                     b_weights = b_weights[:4]
                                 elif len(b_weights) < 4:

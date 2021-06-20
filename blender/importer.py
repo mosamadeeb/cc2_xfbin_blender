@@ -150,7 +150,7 @@ class XfbinImporter:
 
             # Store the signs of the node's scale to apply when exporting, as applying them here (if negative) will break the rotation
             bone['scale_signs'] = tuple(map(lambda x: -1 if x < 0 else 1, node.scale))
-            
+
             # Store these unknown values to set when exporting
             bone['unk_float'] = node.unkFloat
             bone['unk_short'] = node.unkShort
@@ -197,14 +197,23 @@ class XfbinImporter:
             empty.empty_display_size = 0
             empty.parent = armature_obj
 
+            # Link the empty to the collection
+            self.collection.objects.link(empty)
+
             # Set the NUD properties
             empty.xfbin_nud_data.init_data(nucc_model, nucc_model.coord_chunk.name if nucc_model.coord_chunk else None)
 
-            # This will be used to determine if a NUD contains skinned objects or not
-            used_bones = set()
+            # Get the bone range that this NUD uses
+            bone_range = nud.get_bone_range()
 
-            # Link the empty to the collection
-            self.collection.objects.link(empty)
+            # Set the mesh bone as the empty's parent bone, if it exists (it should)
+            mesh_bone = None
+            if nucc_model.coord_chunk:
+                mesh_bone: Bone = armature_obj.data.bones.get(nucc_model.coord_chunk.name)
+                if mesh_bone and bone_range == (0, 0):
+                    # Parent to bone ONLY if the mesh doesn't have any other bones weighted to it (teeth for example)
+                    empty.parent_bone = mesh_bone.name
+                    empty.parent_type = 'BONE'
 
             for group in nud.mesh_groups:
                 for i, mesh in enumerate(group.meshes):
@@ -222,9 +231,9 @@ class XfbinImporter:
 
                     overall_mesh = bpy.data.meshes.new(mesh_name)
 
-                    # These lists will get filled in nud_mesh_to_bmesh
+                    # This list will get filled in nud_mesh_to_bmesh
                     custom_normals = list()
-                    new_bmesh = self.nud_mesh_to_bmesh(mesh, clump, vertex_group_indices, used_bones, custom_normals)
+                    new_bmesh = self.nud_mesh_to_bmesh(mesh, clump, vertex_group_indices, custom_normals)
 
                     # Convert the BMesh to a blender Mesh
                     new_bmesh.to_mesh(overall_mesh)
@@ -235,6 +244,10 @@ class XfbinImporter:
                     overall_mesh.normals_split_custom_set_from_vertices(custom_normals)
                     overall_mesh.auto_smooth_angle = 0
                     overall_mesh.use_auto_smooth = True
+
+                    # If we're not going to parent it, transform the mesh by the bone's matrix
+                    if mesh_bone and bone_range != (0, 0):
+                        overall_mesh.transform(mesh_bone.matrix_local.to_4x4())
 
                     # Add the xfbin material to the mesh
                     overall_mesh.materials.append(xfbin_material_dict.get(mat_chunk.name))
@@ -260,18 +273,6 @@ class XfbinImporter:
                     # Apply the armature modifier
                     modifier = mesh_obj.modifiers.new(type='ARMATURE', name="Armature")
                     modifier.object = armature_obj
-
-            # Set the mesh bone as the mesh's parent bone, if it exists (it should)
-            if nucc_model.coord_chunk:
-                mesh_bone: Bone = armature_obj.data.bones.get(nucc_model.coord_chunk.name, None)
-                if mesh_bone:
-                    if not used_bones:
-                        # Parent to bone ONLY if the mesh doesn't have any other bones weighted to it (teeth for example)
-                        empty.parent_bone = mesh_bone.name
-                        empty.parent_type = 'BONE'
-                    else:
-                        # If we're not going to parent it, transform the mesh by the bone's matrix
-                        empty.matrix_world = mesh_bone.matrix_local.to_4x4()
 
     def make_material(self, xfbin_mat: XfbinMaterialPropertyGroup) -> Material:
         material: Material = bpy.data.materials.new(f'[XFBIN] {xfbin_mat.name}')
@@ -300,7 +301,7 @@ class XfbinImporter:
 
         return material
 
-    def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, used_bones, custom_normals) -> BMesh:
+    def nud_mesh_to_bmesh(self, mesh: NudMesh, clump: NuccChunkClump, vertex_group_indices, custom_normals) -> BMesh:
         bm = bmesh.new()
 
         deform = bm.verts.layers.deform.new("Vertex Weights")
@@ -319,7 +320,6 @@ class XfbinImporter:
             if vtx.bone_weights:
                 for bone_id, bone_weight in zip(vtx.bone_ids, vtx.bone_weights):
                     if bone_weight > 0:
-                        used_bones.add(clump.coord_chunks[bone_id].name)
                         vertex_group_index = vertex_group_indices[clump.coord_chunks[bone_id].name]
                         vert[deform][vertex_group_index] = bone_weight
 
