@@ -99,7 +99,7 @@ class ExportXfbin(Operator, ExportHelper):
         description='If True, will export the bones of each armature in the collection to the XFBIN.\n'
         'If False, will NOT update the bone coordinates in the XFBIN.\n\n'
         'NOTE: "Inject to existing XFBIN" has to be enabled for this option to take effect',
-        default=False,
+        default=True,
     )
 
     export_textures: BoolProperty(
