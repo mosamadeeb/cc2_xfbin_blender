@@ -222,11 +222,12 @@ class XfbinExporter:
 
         # Export textures
         if self.export_textures:
-            texture_chunks_obj = self.collection.objects.get(XFBIN_TEXTURES_OBJ)
+            obj_name = f'{XFBIN_TEXTURES_OBJ} [{self.collection.name}]'
+            texture_chunks_obj = self.collection.objects.get(obj_name)
 
             if not texture_chunks_obj:
                 self.operator.report(
-                    {'WARNING'}, f'Could not export textures. Make sure that the "{XFBIN_TEXTURES_OBJ}" object is inside the collection.')
+                    {'WARNING'}, f'Could not export textures. Make sure that the "{obj_name}" object is inside the collection.')
             else:
                 texture_chunks_data: TextureChunksListPropertyGroup = texture_chunks_obj.xfbin_texture_chunks_data
 

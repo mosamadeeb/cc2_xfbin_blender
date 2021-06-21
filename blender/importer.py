@@ -100,7 +100,7 @@ class XfbinImporter:
             armature_obj.xfbin_clump_data.update_models(armature_obj)
 
         # Create an empty object to store the texture chunks list
-        empty = bpy.data.objects.new(XFBIN_TEXTURES_OBJ, None)
+        empty = bpy.data.objects.new(f'{XFBIN_TEXTURES_OBJ} [{self.collection.name}]', None)
         empty.empty_display_size = 0
 
         # Link the empty to the collection
