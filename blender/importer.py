@@ -395,4 +395,4 @@ class XfbinImporter:
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportXFBIN.bl_idname, text='CyberConnect2 Model Container (.xfbin)')
+    self.layout.operator(ImportXFBIN.bl_idname, text='XFBIN Model Container (.xfbin)')

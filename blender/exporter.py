@@ -730,4 +730,4 @@ class XfbinExporter:
 
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportXfbin.bl_idname, text='CyberConnect2 Model Container (.xfbin)')
+    self.layout.operator(ExportXfbin.bl_idname, text='XFBIN Model Container (.xfbin)')
