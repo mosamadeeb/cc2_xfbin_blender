@@ -97,7 +97,7 @@ class XFBIN_PANEL_OT_OpenNut(bpy.types.Operator):
 
 class XfbinTextureChunkPropertyPanel(Panel):
     bl_idname = 'OBJECT_PT_xfbin_texture_chunk_list'
-    bl_label = 'Texture Chunks'
+    bl_label = '[XFBIN] Texture Chunks'
 
     bl_space_type = 'PROPERTIES'
     bl_context = 'object'
