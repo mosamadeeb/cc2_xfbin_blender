@@ -502,7 +502,8 @@ class XfbinExporter:
             mesh_bone = armature.bones.get(nud_data.mesh_bone)
             empty_parent_type = empty.parent_type
 
-            for mesh_obj in [c for c in empty.children if c.type == 'MESH']:
+            # Sort the meshes alphabetically (because we made sure they imported in that order)
+            for mesh_obj in sorted([c for c in empty.children if c.type == 'MESH'], key=lambda x: x.name):
                 nud_mesh = NudMesh()
                 vertices = nud_mesh.vertices = list()
                 faces = nud_mesh.faces = list()
