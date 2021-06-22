@@ -238,10 +238,10 @@ class XfbinExporter:
 
                         chunk = NuccChunkTexture(texture_chunk.path, texture_chunk.texture_name)
                         with open(texture_chunk.nut_path, 'rb') as f:
-                            chunk.nut_data = f.read()
+                            chunk.file_data = f.read()
 
                         # Sanity check
-                        if not (len(chunk.nut_data) > 4 and chunk.nut_data[:4] == b'NTP3'):
+                        if not (len(chunk.file_data) > 4 and chunk.file_data[:4] == b'NTP3'):
                             self.operator.report(
                                 {'WARNING'}, f'[NUT] Path for {texture_chunk.texture_name} is not a valid NUT file and will be skipped.')
                             continue
