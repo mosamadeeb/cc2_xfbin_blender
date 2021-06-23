@@ -105,7 +105,7 @@ class ExportXfbin(Operator, ExportHelper):
 
     export_textures: BoolProperty(
         name='Export textures',
-        description='If True, will include the NUT textures provided in the Clump properties\' "Texture Chunks" panel to the XFBIN.\n'
+        description='If True, will include the NUT textures provided in the "Texture Chunks" panel in the "#XFBIN Textures" object to the XFBIN.\n'
         'If False, will NOT export any textures, and will reuse the textures from the existing XFBIN.\n\n'
         'NOTE: "Inject to existing XFBIN" has to be enabled for this option to take effect',
         default=True,
