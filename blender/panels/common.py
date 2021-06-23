@@ -74,6 +74,7 @@ class EmptyPropertyGroup(PropertyGroup):
 
     empty: PointerProperty(
         type=bpy.types.Object,
+        name='Empty Object',
         update=update_empty,
         poll=poll_empty,
     )

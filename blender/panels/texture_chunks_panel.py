@@ -6,6 +6,7 @@ from bpy.props import (BoolProperty, CollectionProperty, IntProperty,
 from bpy.types import Panel, PropertyGroup
 
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkTexture
+from ..common.helpers import XFBIN_TEXTURES_OBJ
 from .common import draw_xfbin_list
 
 
@@ -105,7 +106,8 @@ class XfbinTextureChunkPropertyPanel(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object and context.object.type == 'EMPTY' and context.object.parent is None
+        obj = context.object
+        return obj and obj.type == 'EMPTY' and obj.parent is None and obj.name.startswith(XFBIN_TEXTURES_OBJ)
 
     def draw(self, context):
         layout = self.layout
