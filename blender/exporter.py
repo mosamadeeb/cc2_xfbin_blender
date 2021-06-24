@@ -49,7 +49,7 @@ class ExportXfbin(Operator, ExportHelper):
     bl_idname = 'export_scene.xfbin'
     bl_label = 'Export XFBIN'
 
-    filename_ext = ''
+    filename_ext = '.xfbin'
 
     filter_glob: StringProperty(default='*.xfbin', options={'HIDDEN'})
 

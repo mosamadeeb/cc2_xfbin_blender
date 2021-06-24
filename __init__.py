@@ -10,7 +10,7 @@ bl_info = {
     "location": "File > Import-Export",
     "description": "Import/Export XFBIN model files found in CyberConnect2 Naruto Storm and JoJo games.",
     "warning": "",
-    "doc_url": "",
+    "doc_url": "https://github.com/SutandoTsukai181/cc2_xfbin_blender/wiki",
     "wiki_url": "https://github.com/SutandoTsukai181/cc2_xfbin_blender/wiki",
     "tracker_url": "https://github.com/SutandoTsukai181/cc2_xfbin_blender/issues",
     "category": "Import-Export",
