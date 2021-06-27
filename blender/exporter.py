@@ -25,6 +25,7 @@ from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMaterial,
                                              NudMaterialTexture, NudMesh,
                                              NudMeshGroup, NudVertex)
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
+from ..xfbin_lib.xfbin.util.iterative_dict import IterativeDict
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
@@ -506,10 +507,6 @@ class XfbinExporter:
             for mesh_obj in sorted([c for c in empty.children if c.type == 'MESH'], key=lambda x: x.name):
                 mesh_obj: Object
 
-                nud_mesh = NudMesh()
-                vertices = nud_mesh.vertices = list()
-                faces = nud_mesh.faces = list()
-
                 # Generate a mesh with modifiers applied, and put it into a bmesh
                 mesh: Mesh = mesh_obj.evaluated_get(context.evaluated_depsgraph_get()).data
 
@@ -520,6 +517,11 @@ class XfbinExporter:
                 mesh.calc_normals_split()
                 mesh.calc_tangents()
                 mesh.calc_loop_triangles()
+
+                faces = [None] * len(mesh.loop_triangles)
+                face_index = 0
+                vertices = [None] * len(mesh.loop_triangles)
+                vertex_index = 0
 
                 mesh_vertices = mesh.vertices
                 mesh_loops = mesh.loops
@@ -538,71 +540,73 @@ class XfbinExporter:
                 if len(mesh.uv_layers) > 1:
                     uv_layer2 = mesh.uv_layers[1].data
 
-                # Loop vertex index -> nud vertex index
-                vertex_indices_dict = dict()
-
                 for tri_loops in mesh.loop_triangles:
                     tri_loops: MeshLoopTriangle
+
+                    verts = vertices[vertex_index] = list()
+                    vertex_index += 1
 
                     for l_index in tri_loops.loops:
                         l: MeshLoop = mesh_loops[l_index]
                         v_index = l.vertex_index
                         v: MeshVertex = mesh_vertices[v_index]
 
-                        if v_index not in vertex_indices_dict:
-                            # Add this index as a key to the dictionary
-                            vertex_indices_dict[v_index] = len(vertex_indices_dict)
+                        # Create and add the vertex
+                        vert = NudVertex()
+                        verts.append(vert)
 
-                            # Create and add the vertex
-                            vert = NudVertex()
-                            vertices.append(vert)
+                        # Position and normal, tangent, bitangent
+                        vert.position = pos_scaled_from_blender(v.co)
+                        vert.normal = pos_from_blender(l.normal)
+                        vert.tangent = pos_from_blender(l.tangent)
+                        vert.bitangent = l.bitangent_sign * Vector(vert.normal).cross(Vector(vert.tangent))
 
-                            # Position and normal, tangent, bitangent
-                            vert.position = pos_scaled_from_blender(v.co)
-                            vert.normal = pos_from_blender(l.normal)
-                            vert.tangent = pos_from_blender(l.tangent)
-                            vert.bitangent = l.bitangent_sign * Vector(vert.normal).cross(Vector(vert.tangent))
+                        # Color
+                        vert.color = tuple()
+                        if color_layer:
+                            vert.color = tuple(map(lambda x: int(x * 255), color_layer[l_index].color))
 
-                            # Color
-                            vert.color = tuple()
-                            if color_layer:
-                                vert.color = tuple(map(lambda x: int(x * 255), color_layer[l_index].color))
+                        # UV
+                        vert.uv = list()
+                        if uv_layer1:
+                            vert.uv.append(uv_from_blender(uv_layer1[l_index].uv))
+                        if uv_layer2:
+                            vert.uv.append(uv_from_blender(uv_layer2[l_index].uv))
 
-                            # UV
-                            vert.uv = list()
-                            if uv_layer1:
-                                vert.uv.append(uv_from_blender(uv_layer1[l_index].uv))
-                            if uv_layer2:
-                                vert.uv.append(uv_from_blender(uv_layer2[l_index].uv))
+                        vert.bone_ids = tuple()
+                        vert.bone_weights = tuple()
 
-                            vert.bone_ids = tuple()
-                            vert.bone_weights = tuple()
+                        # Bone indices and weights
+                        # Direct copy of TheTurboTurnip's weight sorting method
+                        # https://github.com/theturboturnip/yk_gmd_io/blob/master/yk_gmd_blender/blender/export/legacy/exporter.py#L302-L316
 
-                            # Bone indices and weights
-                            # Direct copy of TheTurboTurnip's weight sorting method
-                            # https://github.com/theturboturnip/yk_gmd_io/blob/master/yk_gmd_blender/blender/export/legacy/exporter.py#L302-L316
+                        # Get a list of (vertex group ID, weight) items sorted in descending order of weight
+                        # Take the top 4 elements, for the top 4 most deforming bones
+                        # Normalize the weights so they sum to 1
+                        b_weights = [(v_groups[g.group].name, g.weight) for g in sorted(
+                            v.groups, key=lambda g: 1 - g.weight) if v_groups[g.group].name in coord_indices_dict]
+                        if len(b_weights) > 4:
+                            b_weights = b_weights[:4]
+                        elif len(b_weights) < 4:
+                            # Add zeroed elements to b_weights so it's 4 elements long
+                            b_weights += [(0, 0.0)] * (4 - len(b_weights))
 
-                            # Get a list of (vertex group ID, weight) items sorted in descending order of weight
-                            # Take the top 4 elements, for the top 4 most deforming bones
-                            # Normalize the weights so they sum to 1
-                            b_weights = [(v_groups[g.group].name, g.weight) for g in sorted(
-                                v.groups, key=lambda g: 1 - g.weight) if v_groups[g.group].name in coord_indices_dict]
-                            if len(b_weights) > 4:
-                                b_weights = b_weights[:4]
-                            elif len(b_weights) < 4:
-                                # Add zeroed elements to b_weights so it's 4 elements long
-                                b_weights += [(0, 0.0)] * (4 - len(b_weights))
+                        weight_sum = sum(weight for (_, weight) in b_weights)
+                        if weight_sum > 0.0:
+                            vert.bone_ids = tuple(map(lambda bw: coord_indices_dict.get(bw[0], 0), b_weights))
+                            vert.bone_weights = tuple(map(lambda bw: bw[1] / weight_sum, b_weights))
+                        else:
+                            vert.bone_ids = [0] * 4
+                            vert.bone_weights = [0] * 3 + [1]
 
-                            weight_sum = sum(weight for (_, weight) in b_weights)
-                            if weight_sum > 0.0:
-                                vert.bone_ids = tuple(map(lambda bw: coord_indices_dict.get(bw[0], 0), b_weights))
-                                vert.bone_weights = tuple(map(lambda bw: bw[1] / weight_sum, b_weights))
-                            else:
-                                vert.bone_ids = [0] * 4
-                                vert.bone_weights = [0] * 3 + [1]
-
+                vertices_dict = IterativeDict()
+                vertices_dict_get = vertices_dict.get_or_next
+                for verts in vertices:
                     # Get the vertex indices to make the face
-                    faces.append(tuple(map(lambda l: vertex_indices_dict[mesh_loops[l].vertex_index], tri_loops.loops)))
+                    faces[face_index] = tuple(map(lambda x: vertices_dict_get(x), verts))
+                    face_index += 1
+
+                vertices = list(vertices_dict)
 
                 # Free the mesh data after we're done with it
                 mesh.free_normals_split()
@@ -620,10 +624,14 @@ class XfbinExporter:
 
                 if len(faces) > NudMesh.MAX_FACES:
                     self.operator.report(
-                        {'WARNING'}, f'[NUD MESH] {mesh_obj.name} has {len(bm.faces)} faces (limit is {NudMesh.MAX_FACES}) and will be skipped.')
+                        {'WARNING'}, f'[NUD MESH] {mesh_obj.name} has {len(faces)} faces (limit is {NudMesh.MAX_FACES}) and will be skipped.')
                     continue
 
                 mesh_data: NudMeshPropertyGroup = mesh_obj.xfbin_mesh_data
+
+                nud_mesh = NudMesh()
+                nud_mesh.vertices = vertices
+                nud_mesh.faces = faces
 
                 # Get the vertex/bone/uv formats from the mesh property group
                 nud_mesh.vertex_type = NudVertexType(int(mesh_data.vertex_type))

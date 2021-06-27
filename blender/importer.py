@@ -358,16 +358,9 @@ class XfbinImporter:
             if len(set(tri_idxs)) != 3:
                 continue
 
-            if -1 in tri_idxs:
-                print(f"Found a negative index inside a triangle_indices list! That shouldn't happen.")
-                continue
-
             try:
                 face = bm.faces.new((bm.verts[tri_idxs[0]], bm.verts[tri_idxs[1]], bm.verts[tri_idxs[2]]))
                 face.smooth = True
-
-                # TODO: materials
-                #face.material_index = material_index
             except Exception as e:
                 # We might get duplicate faces for some reason
                 # print(e)
