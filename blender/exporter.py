@@ -435,6 +435,8 @@ class XfbinExporter:
         return coords
 
     def make_models(self, empties: List[Object], clump: NuccChunkClump, old_clump: NuccChunkClump, xfbin_mats: Dict[str, NuccChunkMaterial], context) -> List[NuccChunkModel]:
+        bpy.ops.object.mode_set(mode='OBJECT')
+
         model_chunks = list()
 
         coord_indices_dict = {
@@ -506,6 +508,9 @@ class XfbinExporter:
             # Sort the meshes alphabetically (because we made sure they imported in that order)
             for mesh_obj in sorted([c for c in empty.children if c.type == 'MESH'], key=lambda x: x.name):
                 mesh_obj: Object
+
+                context.view_layer.objects.active = mesh_obj
+                bpy.ops.object.mode_set(mode='OBJECT')
 
                 # Generate a mesh with modifiers applied, and put it into a bmesh
                 mesh: Mesh = mesh_obj.evaluated_get(context.evaluated_depsgraph_get()).data
