@@ -6,17 +6,19 @@ import bmesh
 import bpy
 from bmesh.types import BMesh
 from bpy.props import BoolProperty, StringProperty
-from bpy.types import Bone, Material, Object, Operator
+from bpy.types import Action, Bone, Material, Object, Operator
 from bpy_extras.io_utils import ImportHelper
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
-from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
-                                              NuccChunkModel, NuccChunkTexture)
+from ..xfbin_lib.xfbin.structure.anm import AnmDataPath
+from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkAnm,
+                                              NuccChunkClump, NuccChunkModel,
+                                              NuccChunkTexture)
 from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
-from .common.helpers import XFBIN_TEXTURES_OBJ
+from .common.helpers import XFBIN_ANMS_OBJ, XFBIN_TEXTURES_OBJ
 from .panels.clump_panel import XfbinMaterialPropertyGroup
 
 
@@ -72,10 +74,12 @@ class XfbinImporter:
         self.collection = self.make_collection(context)
 
         texture_chunks: List[NuccChunkTexture] = list()
+        anm_chunks: List[NuccChunkAnm] = list()
 
         for page in self.xfbin.pages:
-            # Add all texture chunks inside the xfbin
+            # Add all texture and anm chunks inside the xfbin
             texture_chunks.extend(page.get_chunks_by_type('nuccChunkTexture'))
+            anm_chunks.extend(page.get_chunks_by_type('nuccChunkAnm'))
 
             clump = page.get_chunks_by_type('nuccChunkClump')
 
@@ -100,14 +104,21 @@ class XfbinImporter:
             armature_obj.xfbin_clump_data.update_models(armature_obj)
 
         # Create an empty object to store the texture chunks list
-        empty = bpy.data.objects.new(f'{XFBIN_TEXTURES_OBJ} [{self.collection.name}]', None)
-        empty.empty_display_size = 0
+        empty_tex = bpy.data.objects.new(f'{XFBIN_TEXTURES_OBJ} [{self.collection.name}]', None)
+        empty_tex.empty_display_size = 0
 
         # Link the empty to the collection
-        self.collection.objects.link(empty)
+        self.collection.objects.link(empty_tex)
 
         # Add the found texture chunks to the empty object
-        empty.xfbin_texture_chunks_data.init_data(texture_chunks)
+        empty_tex.xfbin_texture_chunks_data.init_data(texture_chunks)
+
+        # Create an empty object to store the anm chunks list
+        empty_anm = bpy.data.objects.new(f'{XFBIN_ANMS_OBJ} [{self.collection.name}]', None)
+        empty_anm.empty_display_size = 0
+
+        self.collection.objects.link(empty_anm)
+        empty_tex.xfbin_anm_chunks_data.init_data(anm_chunks, context)
 
     def make_collection(self, context) -> bpy.types.Collection:
         """
@@ -385,6 +396,83 @@ class XfbinImporter:
                         loop[uv_layer].uv = uv_to_blender(original_uv)
 
         return bm
+
+
+def make_actions(chunk: NuccChunkAnm, context) -> List[Action]:
+    actions = list()
+
+    try:
+        for clump in chunk.clumps:
+            act = bpy.data.actions.new(f'{chunk.name} ({clump.name})')
+
+            arm_obj = bpy.data.objects.get(clump.chunk.name)
+            if arm_obj is None:
+                arm_obj = bpy.data.objects.get(clump.chunk.name + ' [C]')
+
+            arm_sca = dict()
+            arm_mat = dict()
+            if arm_obj is not None:
+                context.view_layer.objects.active = arm_obj
+                bpy.ops.object.mode_set(mode='EDIT')
+
+                for arm_bone in arm_obj.data.edit_bones:
+                    arm_sca[arm_bone.name] = arm_bone.get('scale_signs')
+                    arm_mat[arm_bone.name] = arm_bone.matrix
+
+            for bone in clump.bones:
+                group_name = act.groups.new(bone.name).name
+
+                if bone.anm_entry is None:
+                    continue
+
+                mat_parent = arm_mat.get(bone.parent.name) if bone.parent else Matrix.Identity(4)
+                mat = arm_mat.get(bone.name, Matrix.Identity(4))
+
+                mat = (mat_parent.inverted() @ mat)
+                loc, rot, sca = mat.decompose()
+                rot.invert()
+                sca = Vector(map(lambda a: 1/a, sca))
+
+                bone_path = f'pose.bones["{group_name}"]'
+
+                for curve in bone.anm_entry.curves:
+                    if curve is None or (not len(curve.keyframes)) or curve.data_path == AnmDataPath.UNKNOWN:
+                        continue
+
+                    frames = list(map(lambda x: frame_to_blender(x.frame), curve.keyframes))
+                    values = convert_anm_values(curve.data_path, list(
+                        map(lambda x: x.value, curve.keyframes)), loc, rot, sca, mat)
+
+                    data_path = f'{bone_path}.{AnmDataPath(curve.data_path).name.lower()}'
+
+                    for i in range(len(values[0])):
+                        fc = act.fcurves.new(data_path=data_path, index=i, action_group=group_name)
+                        fc.keyframe_points.add(len(frames))
+                        fc.keyframe_points.foreach_set('co', [x for co in list(
+                            map(lambda f, v: (f, v[i]), frames, values)) for x in co])
+
+                        fc.update()
+
+            actions.append(act)
+    except Exception as e:
+        print(e)
+
+    bpy.ops.object.mode_set(mode='POSE')
+
+    return actions
+
+
+def convert_anm_values(data_path: AnmDataPath, values, loc: Vector, rot: Quaternion, sca: Vector, mat: Matrix):
+    if data_path == AnmDataPath.LOCATION:
+        return list(map(lambda x: loc.cross(pos_cm_to_m(x))[:], values))
+    if data_path == AnmDataPath.ROTATION_EULER:
+        return list(map(lambda x: (rot @ rot_to_blender(x).to_quaternion()).to_euler()[:], values))
+    if data_path == AnmDataPath.ROTATION_QUATERNION:
+        return list(map(lambda x: (rot @ Quaternion((x[3], *x[:3])).inverted())[:], values))
+    if data_path == AnmDataPath.SCALE:
+        return list(map(lambda x: (sca * Vector(([abs(y) for y in x])))[:], values))
+
+    return values
 
 
 def menu_func_import(self, context):

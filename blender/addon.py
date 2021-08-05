@@ -6,6 +6,8 @@ from bpy.types import PropertyGroup
 
 from .exporter import ExportXfbin, menu_func_export
 from .importer import ImportXFBIN, menu_func_import
+from .panels.anm_chunks_panel import (AnmChunksListPropertyGroup,
+                                      anm_chunks_classes)
 from .panels.clump_panel import (ClumpPropertyGroup, clump_classes,
                                  clump_property_groups)
 from .panels.common import EmptyPropertyGroup, clear_clipboard, common_classes
@@ -27,6 +29,7 @@ classes = (
     *nud_classes,
     *nud_mesh_classes,
     *texture_chunks_classes,
+    *anm_chunks_classes,
 )
 
 
@@ -45,8 +48,9 @@ def register():
     bpy.types.Object.xfbin_nud_data = PointerProperty(type=NudPropertyGroup)  # Applies to empties only
     bpy.types.Object.xfbin_mesh_data = PointerProperty(type=NudMeshPropertyGroup)  # Applies to meshes only
 
-    bpy.types.Object.xfbin_texture_chunks_data = PointerProperty(
-        type=TextureChunksListPropertyGroup)  # Applies to empties only
+    # Applies to empties only
+    bpy.types.Object.xfbin_texture_chunks_data = PointerProperty(type=TextureChunksListPropertyGroup)
+    bpy.types.Object.xfbin_anm_chunks_data = PointerProperty(type=AnmChunksListPropertyGroup)
 
     # Define a new class with exec() because we can't set type hints with type()
     pointers_def = 'class XfbinPointersGroup(PropertyGroup): '

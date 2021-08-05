@@ -1,4 +1,5 @@
 XFBIN_TEXTURES_OBJ = '#XFBIN Textures'
+XFBIN_ANMS_OBJ = '#XFBIN Animations'
 
 def hex_str_to_int(val: str) -> int:
     return int(val.replace(' ', ''), 16)

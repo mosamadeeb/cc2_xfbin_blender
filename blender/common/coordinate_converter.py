@@ -30,6 +30,10 @@ def uv_to_blender(uv):
     return (uv[0], 1.0 - uv[1])
 
 
+def frame_to_blender(frame):
+    return frame * 0.01
+
+
 def pos_m_to_cm(pos: Vector) -> Tuple[float, float, float]:
     # From meter to centimeter
     return (pos * 100)[:]
@@ -54,3 +58,7 @@ def rot_from_blender(rot: Euler) -> Tuple[float, float, float]:
 
 def uv_from_blender(uv):
     return (uv[0], 1.0 - uv[1])
+
+
+def frame_from_blender(frame):
+    return frame * 100
