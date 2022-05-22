@@ -1,4 +1,4 @@
 [submodule "xfbin_lib"]
 	path = xfbin_lib
-	url = https://github.com/SutandoTsukai181/xfbin_lib_dev.git
-	branch = anm
+	url = https://github.com/SutandoTsukai181/xfbin_lib.git
+	branch = anm_wip

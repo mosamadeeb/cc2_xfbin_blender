@@ -10,7 +10,8 @@ from bpy.types import Action, Bone, Material, Object, Operator
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Quaternion, Vector
 
-from ..xfbin_lib.xfbin.structure.anm import AnmDataPath
+from ..xfbin_lib.xfbin.structure.anm import (AnmDataPath, AnmEntry,
+                                             AnmEntryFormat)
 from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkAnm,
                                               NuccChunkClump, NuccChunkModel,
                                               NuccChunkTexture)
@@ -402,6 +403,36 @@ def make_actions(chunk: NuccChunkAnm, context) -> List[Action]:
     actions = list()
 
     try:
+        for entry in chunk.other_entries:
+            entry: AnmEntry
+
+            act = bpy.data.actions.new(f'{chunk.name} ({AnmEntryFormat(entry.entry_format).name.lower()})')
+            group_name = act.groups.new(chunk.name).name
+
+            for curve in entry.curves:
+                if curve is None or (not len(curve.keyframes)) or curve.data_path == AnmDataPath.UNKNOWN:
+                    continue
+
+                frames = list(map(lambda x: frame_to_blender(x.frame), curve.keyframes))
+                values = convert_anm_values(curve.data_path, list(map(lambda x: x.value, curve.keyframes)))
+
+                if curve.data_path == AnmDataPath.CAMERA:
+                    # TODO: change camera rotation mode to quaternion, and lens unit to FOV
+                    # This should be done on playing the animation chunk
+                    data_path = 'data.angle'
+                else:
+                    data_path = f'{AnmDataPath(curve.data_path).name.lower()}'
+
+                print(f'value: {values[0]}')
+
+                for i in range(len(values[0])):
+                    fc = act.fcurves.new(data_path=data_path, index=i, action_group=group_name)
+                    fc.keyframe_points.add(len(frames))
+                    fc.keyframe_points.foreach_set('co', [x for co in list(
+                        map(lambda f, v: (f, v[i]), frames, values)) for x in co])
+
+                    fc.update()
+
         for clump in chunk.clumps:
             act = bpy.data.actions.new(f'{chunk.name} ({clump.name})')
 
@@ -425,7 +456,7 @@ def make_actions(chunk: NuccChunkAnm, context) -> List[Action]:
                 if bone.anm_entry is None:
                     continue
 
-                mat_parent = arm_mat.get(bone.parent.name) if bone.parent else Matrix.Identity(4)
+                mat_parent = arm_mat.get(bone.parent.name, Matrix.Identity(4)) if bone.parent else Matrix.Identity(4)
                 mat = arm_mat.get(bone.name, Matrix.Identity(4))
 
                 mat = (mat_parent.inverted() @ mat)
@@ -440,8 +471,8 @@ def make_actions(chunk: NuccChunkAnm, context) -> List[Action]:
                         continue
 
                     frames = list(map(lambda x: frame_to_blender(x.frame), curve.keyframes))
-                    values = convert_anm_values(curve.data_path, list(
-                        map(lambda x: x.value, curve.keyframes)), loc, rot, sca, mat)
+                    values = convert_anm_values_tranformed(curve.data_path, list(
+                        map(lambda x: x.value, curve.keyframes)), loc, rot, sca)
 
                     data_path = f'{bone_path}.{AnmDataPath(curve.data_path).name.lower()}'
 
@@ -462,7 +493,7 @@ def make_actions(chunk: NuccChunkAnm, context) -> List[Action]:
     return actions
 
 
-def convert_anm_values(data_path: AnmDataPath, values, loc: Vector, rot: Quaternion, sca: Vector, mat: Matrix):
+def convert_anm_values_tranformed(data_path: AnmDataPath, values, loc: Vector, rot: Quaternion, sca: Vector):
     if data_path == AnmDataPath.LOCATION:
         return list(map(lambda x: loc.cross(pos_cm_to_m(x))[:], values))
     if data_path == AnmDataPath.ROTATION_EULER:
@@ -471,6 +502,19 @@ def convert_anm_values(data_path: AnmDataPath, values, loc: Vector, rot: Quatern
         return list(map(lambda x: (rot @ Quaternion((x[3], *x[:3])).inverted())[:], values))
     if data_path == AnmDataPath.SCALE:
         return list(map(lambda x: (sca * Vector(([abs(y) for y in x])))[:], values))
+
+    return values
+
+
+def convert_anm_values(data_path: AnmDataPath, values):
+    if data_path == AnmDataPath.LOCATION:
+        return list(map(lambda x: pos_cm_to_m_tuple(x), values))
+    if data_path == AnmDataPath.ROTATION_EULER:
+        return list(map(lambda x: rot_to_blender(x)[:], values))
+    if data_path == AnmDataPath.ROTATION_QUATERNION:
+        return list(map(lambda x: Quaternion((x[3], *x[:3])).inverted()[:], values))
+    if data_path == AnmDataPath.SCALE:
+        return list(map(lambda x: Vector(([abs(y) for y in x]))[:], values))
 
     return values
 
