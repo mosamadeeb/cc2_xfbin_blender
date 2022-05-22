@@ -540,10 +540,13 @@ class XfbinExporter:
 
                 uv_layer1 = None
                 uv_layer2 = None
+                uv_layer3 = None
                 if len(mesh.uv_layers):
                     uv_layer1 = mesh.uv_layers[0].data
                 if len(mesh.uv_layers) > 1:
                     uv_layer2 = mesh.uv_layers[1].data
+                if len(mesh.uv_layers) > 2:
+                    uv_layer3 = mesh.uv_layers[2].data
 
                 for tri_loops in mesh.loop_triangles:
                     tri_loops: MeshLoopTriangle
@@ -577,6 +580,8 @@ class XfbinExporter:
                             vert.uv.append(uv_from_blender(uv_layer1[l_index].uv))
                         if uv_layer2:
                             vert.uv.append(uv_from_blender(uv_layer2[l_index].uv))
+                        if uv_layer3:
+                            vert.uv.append(uv_from_blender(uv_layer3[l_index].uv))
 
                         vert.bone_ids = tuple()
                         vert.bone_weights = tuple()
