@@ -40,7 +40,7 @@ class XfbinTextureChunkPropertyGroup(PropertyGroup):
     def init_data(self, chunk: NuccChunkTexture):
         self.texture_name = chunk.name
         self.path = chunk.filePath
-        self.texture = chunk.name
+        
 
     include: BoolProperty(
         name='Include in XFBIN',

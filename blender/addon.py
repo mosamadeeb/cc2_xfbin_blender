@@ -16,6 +16,11 @@ from .panels.nud_panel import (NudPropertyGroup, nud_classes,
 from .panels.texture_chunks_panel import (TextureChunksListPropertyGroup,
                                           texture_chunks_classes,
                                           texture_chunks_property_groups)
+from .panels.dynamics_panel import (DynamicsPropertyGroup,
+                                    dynamics_chunks_classes,
+                                    dynamics_chunks_property_groups
+                                    
+                                    )
 
 XfbinPointersGroup: Type
 
@@ -27,6 +32,7 @@ classes = (
     *nud_classes,
     *nud_mesh_classes,
     *texture_chunks_classes,
+    *dynamics_chunks_classes
 )
 
 
@@ -44,13 +50,15 @@ def register():
     bpy.types.Object.xfbin_clump_data = PointerProperty(type=ClumpPropertyGroup)  # Applies to armatures only
     bpy.types.Object.xfbin_nud_data = PointerProperty(type=NudPropertyGroup)  # Applies to empties only
     bpy.types.Object.xfbin_mesh_data = PointerProperty(type=NudMeshPropertyGroup)  # Applies to meshes only
+    bpy.types.Object.xfbin_dynamics_data = PointerProperty(type=DynamicsPropertyGroup)  # Applies to empties only
 
     bpy.types.Object.xfbin_texture_chunks_data = PointerProperty(
         type=TextureChunksListPropertyGroup)  # Applies to empties only
 
     # Define a new class with exec() because we can't set type hints with type()
     pointers_def = 'class XfbinPointersGroup(PropertyGroup): '
-    for pg_type in (EmptyPropertyGroup, *clump_property_groups, *nud_property_groups, *nud_mesh_property_groups, *texture_chunks_property_groups):
+    for pg_type in (EmptyPropertyGroup, *clump_property_groups, *nud_property_groups, *nud_mesh_property_groups,
+    *texture_chunks_property_groups, *dynamics_chunks_property_groups):
         pointers_def += f'{pg_type.__name__}: PointerProperty(type={pg_type.__name__}); '
 
     # Make a copy of the locals dict and add all of the necessary classes to it
@@ -77,6 +85,7 @@ def unregister():
     del bpy.types.Object.xfbin_nud_data
     del bpy.types.Object.xfbin_mesh_data
     del bpy.types.Object.xfbin_texture_chunks_data
+    del bpy.types.Object.xfbin_dynamics_data
     del bpy.types.Object.xfbin_pointers
 
     bpy.utils.unregister_class(XfbinPointersGroup)

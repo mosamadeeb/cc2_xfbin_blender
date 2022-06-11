@@ -11,12 +11,12 @@ from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
 from ..xfbin_lib.xfbin.structure.nucc import (CoordNode, NuccChunkClump,
-                                              NuccChunkModel, NuccChunkTexture)
+                                              NuccChunkModel, NuccChunkTexture, NuccChunkDynamics)
 from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
-from .common.helpers import XFBIN_TEXTURES_OBJ
+from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ
 from .panels.clump_panel import XfbinMaterialPropertyGroup
 
 
@@ -72,7 +72,6 @@ class XfbinImporter:
         self.collection = self.make_collection(context)
 
         texture_chunks: List[NuccChunkTexture] = list()
-
         for page in self.xfbin.pages:
             # Add all texture chunks inside the xfbin
             texture_chunks.extend(page.get_chunks_by_type('nuccChunkTexture'))
@@ -99,6 +98,29 @@ class XfbinImporter:
             # Update the models' PointerProperty to use the models that were just imported
             armature_obj.xfbin_clump_data.update_models(armature_obj)
 
+            #Merge vertices for imported model, replace it with a better method later.
+            bpy.ops.object.select_all(action='DESELECT')
+            for mesh in armature_obj.children_recursive:
+                if mesh.type == 'MESH':
+                    mesh.select_set(True)
+                    bpy.context.view_layer.objects.active = mesh
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.remove_doubles(threshold=0.00001, use_unselected=False, use_sharp_edge_from_normals=True)
+            bpy.ops.object.editmode_toggle()
+            bpy.ops.object.select_all(action='DESELECT')
+            
+        
+        for page in self.xfbin.pages:
+            #get dynamics chunk
+            dynamics = page.get_chunks_by_type('nuccChunkDynamics')
+
+            if not len(dynamics):
+                continue
+
+            dynamics: NuccChunkDynamics = dynamics[0]
+            dynamics_obj = self.make_dynamics(dynamics, context)
+        
         # Create an empty object to store the texture chunks list
         empty = bpy.data.objects.new(f'{XFBIN_TEXTURES_OBJ} [{self.collection.name}]', None)
         empty.empty_display_size = 0
@@ -121,6 +143,24 @@ class XfbinImporter:
         # Link the new collection to the currently active collection.
         context.collection.children.link(collection)
         return collection
+
+    def make_dynamics(self, dynamics: NuccChunkDynamics, context):
+
+        dynamics_obj = bpy.data.objects.new(f'{XFBIN_DYNAMICS_OBJ} [{dynamics.name}]', None)
+        dynamics_obj.empty_display_size = 0
+
+        # Set the Xfbin dynamics properties
+        dynamics_obj.xfbin_dynamics_data.init_data(dynamics)
+
+        #Use Spring Group names instead of indices for attached spring groups
+        for col in dynamics_obj.xfbin_dynamics_data.collision_spheres:
+            if col.attach_groups == True and col.attached_count > 0:
+                for c in col.attached_groups:
+                    for sp in dynamics_obj.xfbin_dynamics_data.spring_groups:
+                        if c.value == str(sp.spring_group_index):
+                            c.value = sp.name
+
+        self.collection.objects.link(dynamics_obj)
 
     def make_armature(self, clump: NuccChunkClump, context):
         armature_name = f'{clump.name} [C]'  # Avoid blender renaming meshes by making the armature name unique

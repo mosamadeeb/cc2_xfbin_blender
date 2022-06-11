@@ -199,13 +199,13 @@ class ClumpPropertyGroup(PropertyGroup):
     )
 
     coord_flag0: IntProperty(
-        name='Coord Flag 1',
+        name='LOD Levels',
         min=0,
         max=255,
     )
 
     coord_flag1: IntProperty(
-        name='Coord Flag 2',
+        name='LOD Flag 2',
         min=0,
         max=255,
     )
@@ -459,11 +459,18 @@ class ClumpPropertyPanel(Panel):
 
         draw_copy_paste_ops(layout, 'xfbin_clump_data', 'Clump Properties')
 
+        layout.label(text='LOD Flags:')
+        box = layout.box()
+        row = box.row()
+        row.prop(data, 'coord_flag0')
+        row.prop(data, 'coord_flag1')
+
         layout.prop(data, 'path')
 
         layout.label(text='Models')
         draw_xfbin_list(layout, 0, data, f'xfbin_clump_data', 'models', 'model_index')
         model_index = data.model_index
+
 
         if data.models and model_index >= 0:
             model: EmptyPropertyGroup = data.models[model_index]

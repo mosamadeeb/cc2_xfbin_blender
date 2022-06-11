@@ -4,7 +4,7 @@ from itertools import chain
 from os import path
 from typing import Dict, List
 
-import bpy
+import bpy, bmesh
 from bpy.props import (BoolProperty, CollectionProperty, EnumProperty,
                        StringProperty)
 from bpy.types import (Armature, EditBone, Mesh, MeshLoop, MeshLoopTriangle,
@@ -17,9 +17,10 @@ from ..xfbin_lib.xfbin.structure.br.br_nud import (NudBoneType, NudUvType,
 from ..xfbin_lib.xfbin.structure.nucc import (ClumpModelGroup, CoordNode,
                                               MaterialTextureGroup,
                                               NuccChunkClump, NuccChunkCoord,
-                                              NuccChunkMaterial,
+                                              NuccChunkMaterial, NuccChunkDynamics,
                                               NuccChunkModel, NuccChunkNull,
-                                              NuccChunkTexture, RiggingFlag)
+                                              NuccChunkTexture, RiggingFlag,
+                                              Dynamics1, Dynamics2)
 from ..xfbin_lib.xfbin.structure.nud import (Nud, NudMaterial,
                                              NudMaterialProperty,
                                              NudMaterialTexture, NudMesh,
@@ -29,7 +30,7 @@ from ..xfbin_lib.xfbin.util.iterative_dict import IterativeDict
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from ..xfbin_lib.xfbin.xfbin_writer import write_xfbin_to_path
 from .common.coordinate_converter import *
-from .common.helpers import XFBIN_TEXTURES_OBJ, hex_str_to_int
+from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ, hex_str_to_int
 from .panels.clump_panel import (ClumpModelGroupPropertyGroup,
                                  ClumpPropertyGroup,
                                  XfbinMaterialPropertyGroup,
@@ -43,6 +44,9 @@ from .panels.nud_mesh_panel import (NudMaterialPropertyGroup,
 from .panels.nud_panel import NudPropertyGroup
 from .panels.texture_chunks_panel import (TextureChunksListPropertyGroup,
                                           XfbinTextureChunkPropertyGroup)
+from .panels.dynamics_panel import (DynamicsPropertyGroup,
+                                    SpringGroupsPropertyGroup,
+                                    CollisionSpheresPropertyGroup)    
 
 
 class ExportXfbin(Operator, ExportHelper):
@@ -134,6 +138,12 @@ class ExportXfbin(Operator, ExportHelper):
         type=BoolPropertyGroup,
     )
 
+    export_dynamics: BoolProperty(
+        name='Export Dynamics',
+        description='',
+        default=True,
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -156,6 +166,8 @@ class ExportXfbin(Operator, ExportHelper):
         layout.prop(self, 'inject_to_clump')
 
         layout.prop(self, 'export_specific_meshes')
+
+        layout.prop(self, 'export_dynamics')
 
         if self.export_specific_meshes:
             # Update the "meshes to export" collection
@@ -207,6 +219,8 @@ class XfbinExporter:
         self.inject_to_clump = export_settings.get('inject_to_clump')
         self.export_specific_meshes = export_settings.get('export_specific_meshes')
         self.meshes_to_export = export_settings.get('meshes_to_export')
+        self.export_dynamics = export_settings.get('export_dynamics')
+
 
     xfbin: Xfbin
 
@@ -220,6 +234,14 @@ class XfbinExporter:
         else:
             self.export_meshes = self.export_bones = self.export_textures = True
             self.inject_to_clump = False
+
+        #Lazy fix to apply transforms
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for o in bpy.data.collections[self.collection.name].all_objects:
+            if o.type == 'MESH' or o.type == 'ARMATURE':
+                o.select_set(True)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        bpy.ops.object.select_all(action='DESELECT')
 
         # Export textures
         if self.export_textures:
@@ -248,7 +270,12 @@ class XfbinExporter:
                             continue
 
                         self.xfbin.add_chunk_page(chunk)
-
+        
+        #Export dynamics
+        if self.export_dynamics == True:
+            for dynamics_obj in [obj for obj in self.collection.objects if obj.type == 'EMPTY' and obj.name.startswith(XFBIN_DYNAMICS_OBJ)]:
+                dynamics = self.make_dynamics(dynamics_obj, context)
+                self.xfbin.add_chunk_page(dynamics)
         # Export clumps
         for armature_obj in [obj for obj in self.collection.objects if obj.type == 'ARMATURE']:
             # Create a NuccChunkClump from the armature
@@ -302,6 +329,7 @@ class XfbinExporter:
 
         # Write the xfbin
         write_xfbin_to_path(self.xfbin, self.filepath)
+        
 
     def make_clump(self, armature_obj: Object, context) -> NuccChunkClump:
         """Creates and returns a NuccChunkClump made from an Armature and its child meshes."""
@@ -511,14 +539,29 @@ class XfbinExporter:
 
                 context.view_layer.objects.active = mesh_obj
                 bpy.ops.object.mode_set(mode='OBJECT')
+                
+                # Add a Triangulate modifier to fix issues with N-Gons and tangents calculation
+                # Lazy fix but doesn't cause issues with normals or uv
+                #mesh_obj.modifiers.new('Tri[XFBIN]', 'TRIANGULATE')
 
                 # Generate a mesh with modifiers applied, and put it into a bmesh
                 mesh: Mesh = mesh_obj.evaluated_get(context.evaluated_depsgraph_get()).data
+
+                # Remove Triangulate modifier because it's not needed anymore
+                #mesh_obj.modifiers.remove(mesh_obj.modifiers['Tri[XFBIN]'])
 
                 # Transform the mesh by the inverse of its bone's matrix, if it was not parented to it
                 if mesh_bone and empty_parent_type != 'BONE':
                     mesh.transform(mesh_bone.matrix_local.to_4x4().inverted())
 
+                #Triangulate the mesh using bmesh, Causes issues sometimes ?
+                meshtris = bmesh.new()
+                meshtris.from_mesh(mesh)
+                bmesh.ops.triangulate(meshtris, faces=meshtris.faces[:])
+                meshtris.to_mesh(mesh)
+                meshtris.free()
+                mesh_obj.data.update()
+                
                 mesh.calc_normals_split()
                 mesh.calc_tangents()
                 mesh.calc_loop_triangles()
@@ -540,10 +583,13 @@ class XfbinExporter:
 
                 uv_layer1 = None
                 uv_layer2 = None
+                uv_layer3 = None
                 if len(mesh.uv_layers):
                     uv_layer1 = mesh.uv_layers[0].data
                 if len(mesh.uv_layers) > 1:
                     uv_layer2 = mesh.uv_layers[1].data
+                if len(mesh.uv_layers) > 2:
+                    uv_layer3 = mesh.uv_layers[2].data
 
                 for tri_loops in mesh.loop_triangles:
                     tri_loops: MeshLoopTriangle
@@ -577,6 +623,8 @@ class XfbinExporter:
                             vert.uv.append(uv_from_blender(uv_layer1[l_index].uv))
                         if uv_layer2:
                             vert.uv.append(uv_from_blender(uv_layer2[l_index].uv))
+                        if uv_layer3:
+                            vert.uv.append(uv_from_blender(uv_layer3[l_index].uv))
 
                         vert.bone_ids = tuple()
                         vert.bone_weights = tuple()
@@ -751,7 +799,89 @@ class XfbinExporter:
             chunk.texture_groups.append(g)
 
         return chunk
+    
+    
+    def make_dynamics(self, dynamics_obj: Object, context) -> NuccChunkDynamics:
+        #test make dynamics
+        context.view_layer.objects.active = dynamics_obj
+        dynamics_data: DynamicsPropertyGroup = dynamics_obj.xfbin_dynamics_data
+        dynamics = NuccChunkDynamics(dynamics_data.path, dynamics_data.clump_name)
 
+        #find the correct clump chunk        
+        for c in self.xfbin.get_chunks_by_type(NuccChunkClump):
+            if c.filePath == dynamics_data.path:
+                dynamics.clump_chunk = c
+
+        dynamics.SPGroupCount = len(dynamics_data.spring_groups)
+        dynamics.ColSphereCount = len(dynamics_data.collision_spheres)
+       
+        dynamics.SPGroup = list()
+        sortedSPG = sorted(dynamics_data.spring_groups, key= lambda x: x.spring_group_index)
+        for dynamic in sortedSPG: #dynamics_data.spring_groups:
+            dynamic: SpringGroupsPropertyGroup
+            d = Dynamics1()
+            
+            d.Bounciness = dynamic.dyn1
+            d.Elasticity = dynamic.dyn2
+            d.Stiffness = dynamic.dyn3
+            d.Movement = dynamic.dyn4
+            d.coord_index = dynamic.bone_index
+            d.BonesCount = dynamic.bone_count
+            d.shorts = list()
+            
+            for flag in dynamic.flags:
+                d.shorts.append(flag.value)
+            dynamics.SPGroup.append(d)
+        
+        dynamics.ColSphere = list()
+        for col in dynamics_data.collision_spheres:
+            col: CollisionSpheresPropertyGroup
+            c = Dynamics2()
+            
+            c.offset_x = col.offset_x
+            c.offset_y = col.offset_y
+            c.offset_z = col.offset_z
+            c.scale_x = col.scale_x
+            c.scale_y = col.scale_y
+            c.scale_z = col.scale_z
+            c.coord_index = col.bone_index
+
+            if col.attach_groups == True:
+                col.attach_groups = 1
+            else:
+                col.attach_groups = 0
+            c.attach_groups = col.attach_groups
+
+            c.negative_unk = -1
+            c.attached_groups = 0
+            
+            c.attached_groups_count = col.attached_count
+
+            c.attached_groups = list()
+            
+            attached_groups_temp= list()
+            for g in col.attached_groups:
+                attached_groups_temp.append(g.value)
+            
+            for g in attached_groups_temp:
+                for dyn in dynamics_data.spring_groups:
+                    if g == dyn.name:
+                        g = dyn.spring_group_index
+                c.attached_groups.append(g)
+            
+
+            
+            dynamics.ColSphere.append(c)
+        
+        
+        if self.inject_to_xfbin:
+            # Try to get the dynamics chunk in the existing xfbin
+            old_dynamics = self.xfbin.get_chunk_page(dynamics)
+
+            if old_dynamics:
+                old_dynamics: NuccChunkDynamics = old_dynamics[1].get_chunks_by_type(NuccChunkDynamics)[0]
+
+        return dynamics
 
 def menu_func_export(self, context):
     self.layout.operator(ExportXfbin.bl_idname, text='XFBIN Model Container (.xfbin)')

@@ -3,7 +3,7 @@ from typing import Dict, Type
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import (BoolProperty, FloatProperty, IntProperty,
-                       PointerProperty, StringProperty)
+                       PointerProperty, StringProperty, EnumProperty)
 from bpy.types import Operator, PropertyGroup, UILayout, UIList
 
 # Globals
@@ -47,6 +47,9 @@ def matrix_prop_group(ui_layout: UILayout, data, prop_name: str, length: int, te
 
     for i in range((length // 4) * 4, (length // 4) * 4 + (length % 4)):
         box.prop(collection[i], 'value', text='')
+
+class StringPropertyGroup(PropertyGroup):
+    value: StringProperty()
 
 
 class IntPropertyGroup(PropertyGroup):
@@ -360,6 +363,7 @@ def draw_xfbin_list(layout: UILayout, list_index: int, data, path: str, collecti
 
 
 common_classes = (
+    StringPropertyGroup,
     IntPropertyGroup,
     FloatPropertyGroup,
     BoolPropertyGroup,
