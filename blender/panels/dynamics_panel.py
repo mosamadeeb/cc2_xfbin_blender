@@ -252,7 +252,6 @@ class DynamicsPropertyGroup(PropertyGroup):
 
         # Set the properties
         self.name = self.clump_name = dynamics.clump_chunk.name
-        print(dynamics.clump_chunk)
 
         self.sg_count = dynamics.SPGroupCount
         self.cs_count = dynamics.ColSphereCount
@@ -275,10 +274,10 @@ class DynamicsPropertyGroup(PropertyGroup):
         
         # Add collision groups
         self.collision_spheres.clear()
-        for colsphere in dynamics.ColSphere:
+        for i, colsphere in enumerate(dynamics.ColSphere):
             c: CollisionSpheresPropertyGroup = self.collision_spheres.add()
             c.init_data(colsphere)
-            c.name = f'Collision Group [{self.bonename(colsphere.coord_index, self.clump_name)}]'
+            c.name = f'Collision Group {i} [{self.bonename(colsphere.coord_index, self.clump_name)}]'
             c.bone_collision = self.bonename(colsphere.coord_index, self.clump_name)
         
         
@@ -318,12 +317,14 @@ class DynamicsPropertyPanel(Panel):
         
         layout.prop(data, 'clump_name')
         layout.prop(data, 'path')
-        layout.operator(update_dynamics.bl_idname)
 
         box = layout.box()
         row = box.row()
         row.label(text = f'Spring Group Count = {len(context.object.xfbin_dynamics_data.spring_groups)}')
         row.label(text = f'Collision Groups Count = {len(context.object.xfbin_dynamics_data.collision_spheres)}')
+        row = layout.row()
+        row.operator(update_dynamics.bl_idname)
+        row.operator(MakeCollisions.bl_idname)
         #row.prop(data, 'sg_count')
         #row.prop(data, 'cs_count')
 
@@ -351,7 +352,7 @@ class DynamicsPropertyPanel(Panel):
             matrix_prop_group(box, spring_groups, 'flags', spring_groups.bone_count, 'Bone Flags')
 
         
-        layout.label(text='Collision Spheres')
+        layout.label(text='Collision Groups')
         draw_xfbin_list(layout, 1, data, f'xfbin_dynamics_data', 'collision_spheres', 'cs_index')
         cs_index = data.cs_index
 
@@ -365,6 +366,8 @@ class DynamicsPropertyPanel(Panel):
             #row.label(text= f'Bone index = {getindex(collision_spheres.bone_collision)}')
             row.prop(collision_spheres, 'attach_groups')
             row = box.row()
+            row.operator(UpdateCollision.bl_idname)
+            row = box.row()
             row.prop(collision_spheres, 'offset_x')
             row.prop(collision_spheres, 'offset_y')
             row.prop(collision_spheres, 'offset_z')
@@ -372,7 +375,7 @@ class DynamicsPropertyPanel(Panel):
             row.prop(collision_spheres, 'scale_x')
             row.prop(collision_spheres, 'scale_y')
             row.prop(collision_spheres, 'scale_z')
-
+            
             if collision_spheres.attach_groups == True:
                 row = box.row()
                 row.prop(collision_spheres, 'attached_count')
@@ -416,18 +419,16 @@ class update_dynamics(bpy.types.Operator):
                 for sp in dynamics_object.xfbin_dynamics_data.spring_groups:
                     if sp.bone_index == index:
                         sp.spring_group_index = i
-            print(sorted(indices))
-
             
             #update collision groups
-            for col in dynamics_object.xfbin_dynamics_data.collision_spheres:
+            for index, col in enumerate(dynamics_object.xfbin_dynamics_data.collision_spheres):
                 if col.bone_collision not in armature_obj.data.bones:
                     self.report(
                         {'WARNING'}, f'Spring Group "{col.bone_collision}" Could not be found in "{armature_obj.name}". Please remove it')
                 for i, b in enumerate(armature_obj.data.bones):
                     if col.bone_collision in armature_obj.data.bones and col.bone_collision == b.name:
                         col.bone_index = i
-                        col.name = f'Collision Group [{b.name}]'
+                        col.name = f'Collision Group {index} [{b.name}]'
         
 
         #try to only update one dynamics object
@@ -458,6 +459,90 @@ class index_to_string(bpy.types.Operator):
                             c.value = sp.name
             return {'FINISHED'}
 
+
+class MakeCollisions(bpy.types.Operator):
+    bl_idname = "object.collisions"
+    bl_label = "Make Collision Objects"
+    bl_description = 'Create a representation of collisions in blender'
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return obj and obj.type == 'EMPTY' and obj.parent is None and obj.name.startswith(XFBIN_DYNAMICS_OBJ)
+    def execute(self, context):
+        collection_name = f'{bpy.context.object.xfbin_dynamics_data.clump_name} Collision'
+
+        #Remove any collection that has the same name we're gonna use and its objects
+        for c in bpy.data.collections:
+            if c.name.startswith(collection_name):
+                if len(c.objects) > 0:
+                    for o in c.objects:
+                        bpy.data.objects.remove(o)
+                bpy.data.collections.remove(c)
+
+        collection = bpy.data.collections.new(collection_name)
+
+        clump = bpy.context.object.xfbin_dynamics_data.clump_name + ' [C]'
+
+        #bpy.data.collections[bpy.context.object.users_collection[0].name].children.link(collection)
+        bpy.context.scene.collection.children.link(collection)
+
+        for col in bpy.context.object.xfbin_dynamics_data.collision_spheres:
+            #Adds an empty sphere with the correct size
+            empty = bpy.data.objects.new(col.name, None)
+            empty.empty_display_size = 0.01
+            empty.empty_display_type = 'SPHERE'
+            
+            #Link the new object we create to the collection
+            collection.objects.link(empty)
+            
+            #Add object constraint to attach the sphere
+            con = empty.constraints.new(type= 'CHILD_OF')
+            con.name = f'{col.name} Child Of {clump}'
+            con.target = bpy.data.objects[clump]
+            con.subtarget = bpy.data.objects[clump].data.bones[col.bone_collision].name
+            
+            #Don't set inverse
+            con.set_inverse_pending = False
+            
+            #Set the empty as the active object
+            bpy.ops.object.select_all(action='DESELECT')
+            empty.select_set(True)
+            bpy.context.view_layer.objects.active = empty
+        
+            #use collision group info to represent the sphere, need to use a better method 
+            bpy.ops.transform.resize(value =(col.scale_z, col.scale_y, col.scale_x), orient_type='LOCAL')
+            bpy.ops.transform.translate(value= (col.offset_z * 0.01, col.offset_y * 0.01, col.offset_x * 0.01), orient_type='LOCAL')
+            
+            
+        return {'FINISHED'}
+
+class UpdateCollision(bpy.types.Operator):
+    bl_idname = "object.update_coliision"
+    bl_label = "Use object coordinates"
+    bl_description = 'Copy the position and scale info from an existing collision object'
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return obj and obj.type == 'EMPTY' and obj.parent is None and obj.name.startswith(XFBIN_DYNAMICS_OBJ)
+    def execute(self, context):
+        
+        cs_index = context.object.xfbin_dynamics_data.cs_index
+        colgroup = context.object.xfbin_dynamics_data.collision_spheres
+        name = colgroup[cs_index].name
+        if colgroup[cs_index]:
+            obj = context.view_layer.objects.get(colgroup[cs_index].name)
+            if obj:
+                colgroup[cs_index].offset_z = obj.location[0] * 100
+                colgroup[cs_index].offset_y = obj.location[1] * 100
+                colgroup[cs_index].offset_x = obj.location[2] * 100
+                colgroup[cs_index].scale_z = obj.scale[0]
+                colgroup[cs_index].scale_y = obj.scale[1]
+                colgroup[cs_index].scale_x = obj.scale[2]
+            else:
+                self.report({"WARNING"}, 'Collision object was not found, use (Make Collisions) button to create it')
+
+        return {'FINISHED'}
+
 dynamics_chunks_property_groups = (
     SpringGroupsPropertyGroup,
     CollisionSpheresPropertyGroup,
@@ -468,5 +553,7 @@ dynamics_chunks_classes = (
     *dynamics_chunks_property_groups,
     DynamicsPropertyPanel,
     update_dynamics,
-    index_to_string
+    index_to_string,
+    MakeCollisions,
+    UpdateCollision
 )

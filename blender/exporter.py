@@ -367,9 +367,9 @@ class XfbinExporter:
             clump.coord_chunks = self.make_coords(armature, clump, context)
         elif old_clump:
             clump.coord_chunks = old_clump.coord_chunks
-        else:
+        '''else:
             self.operator.report({'ERROR_INVALID_INPUT'}, 'Could not export bones. Please check the exporter options.')
-            raise Exception('Failed to export.')
+            raise Exception('Failed to export.')'''
 
         # Export meshes
         if self.export_meshes:

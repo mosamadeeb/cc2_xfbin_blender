@@ -99,7 +99,7 @@ class XfbinImporter:
             armature_obj.xfbin_clump_data.update_models(armature_obj)
 
             #Merge vertices for imported model, replace it with a better method later.
-            bpy.ops.object.select_all(action='DESELECT')
+            '''bpy.ops.object.select_all(action='DESELECT')
             for mesh in armature_obj.children_recursive:
                 if mesh.type == 'MESH':
                     mesh.select_set(True)
@@ -108,7 +108,7 @@ class XfbinImporter:
             bpy.ops.mesh.select_all(action='SELECT')
             bpy.ops.mesh.remove_doubles(threshold=0.00001, use_unselected=False, use_sharp_edge_from_normals=True)
             bpy.ops.object.editmode_toggle()
-            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.select_all(action='DESELECT')'''
             
         
         for page in self.xfbin.pages:
