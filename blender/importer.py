@@ -31,6 +31,8 @@ class ImportXFBIN(Operator, ImportHelper):
 
     filter_glob: StringProperty(default="*.xfbin", options={"HIDDEN"})
 
+    merge_verts: BoolProperty(name= 'Merge Vertices', default= False)
+
     def draw(self, context):
         layout = self.layout
 
@@ -38,6 +40,7 @@ class ImportXFBIN(Operator, ImportHelper):
         layout.use_property_decorate = True
 
         layout.prop(self, 'use_full_material_names')
+        layout.prop(self, 'merge_verts')
 
     def execute(self, context):
         import time
@@ -63,6 +66,7 @@ class XfbinImporter:
         self.operator = operator
         self.filepath = filepath
         self.use_full_material_names = import_settings.get("use_full_material_names")
+        self.merge_verts = import_settings.get('merge_verts')
 
     xfbin: Xfbin
     collection: bpy.types.Collection
@@ -307,6 +311,14 @@ class XfbinImporter:
                     overall_mesh.normals_split_custom_set_from_vertices(custom_normals)
                     overall_mesh.auto_smooth_angle = 0
                     overall_mesh.use_auto_smooth = True
+
+                    #Merge verts
+                    if self.merge_verts == True:
+                        merged = bmesh.new()
+                        merged.from_mesh(overall_mesh)
+                        bmesh.ops.remove_doubles(merged, verts=merged.verts, dist= 0.000001)
+                        merged.to_mesh(overall_mesh)
+                        merged.free()
 
                     # If we're not going to parent it, transform the mesh by the bone's matrix
                     if mesh_bone and bone_range != (0, 0):

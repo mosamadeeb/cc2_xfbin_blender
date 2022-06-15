@@ -20,7 +20,7 @@ class NudPropertyGroup(PropertyGroup):
         name='Rigging Flag',
         items=[('1', 'Unskinned (0x01)', ''),
                ('2', 'Skinned (0x02)', ''),
-               ('4', 'Body (0x04)', ''), ],
+               ('4', 'Outline (0x04)', ''), ],
         description='Affects the NUD\'s rigging. Unskinned and Skinned should not be enabled at the same time. Examples:\n'
         'Eyes (Storm): Unskinned (0x01)\n'
         'Eyes (JoJo): Skinned (0x02)\n'
@@ -81,7 +81,7 @@ class NudPropertyGroup(PropertyGroup):
             rigging_flag.add('1')
         if model.rigging_flag & RiggingFlag.SKINNED:
             rigging_flag.add('2')
-        if model.rigging_flag & RiggingFlag.BODY:
+        if model.rigging_flag & RiggingFlag.OUTLINE:
             rigging_flag.add('4')
 
         self.rigging_flag = rigging_flag

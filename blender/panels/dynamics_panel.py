@@ -313,6 +313,7 @@ class DynamicsPropertyPanel(Panel):
                 if bone == b.name:
                     boneindex = i
             return boneindex
+        
         draw_copy_paste_ops(layout, 'xfbin_dynamics_data', 'Dynamics Properties')
         
         layout.prop(data, 'clump_name')
