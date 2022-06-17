@@ -16,7 +16,7 @@ from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
-from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ
+from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ, image_from_data, nut2dds,int_to_hex_str, F00A, _02_F00A
 from .panels.clump_panel import XfbinMaterialPropertyGroup
 
 
@@ -33,12 +33,19 @@ class ImportXFBIN(Operator, ImportHelper):
 
     merge_verts: BoolProperty(name= 'Merge Vertices', default= False)
 
+    import_textures: BoolProperty(name= 'Import Textures', default= True)
+
+    skip_lod_tex: BoolProperty(name= 'Skip LOD Textures', default= False)
+
+
     def draw(self, context):
         layout = self.layout
 
         layout.use_property_split = True
         layout.use_property_decorate = True
 
+        layout.prop(self, 'import_textures')
+        layout.prop(self, 'skip_lod_tex')
         layout.prop(self, 'use_full_material_names')
         layout.prop(self, 'merge_verts')
 
@@ -48,6 +55,9 @@ class ImportXFBIN(Operator, ImportHelper):
         # try:
         start_time = time.time()
         importer = XfbinImporter(self, self.filepath, self.as_keywords(ignore=("filter_glob",)))
+        
+        if self.import_textures == True:
+            importer.make_textures(context)	
 
         importer.read(context)
 
@@ -67,9 +77,34 @@ class XfbinImporter:
         self.filepath = filepath
         self.use_full_material_names = import_settings.get("use_full_material_names")
         self.merge_verts = import_settings.get('merge_verts')
+        self.import_textures = import_settings.get('import_textures')
+        self.skip_lod_tex = import_settings.get('skip_lod_tex')
 
     xfbin: Xfbin
     collection: bpy.types.Collection
+    
+    def make_textures(self, context):
+        self.xfbin = read_xfbin(self.filepath)
+
+        texture_chunks: List[NuccChunkTexture] = list()
+
+        for page in self.xfbin.pages:
+          # Add all texture chunks inside the xfbin
+          texture_chunks.extend(page.get_chunks_by_type('nuccChunkTexture'))
+
+        # Add textures to .blend file
+        images = [img.name for img in bpy.data.images]
+        lod = ['LOD1','lod1','LOD2','lod2', 'LOD', 'lod']
+        for texture in texture_chunks:
+            #Skip textures that already exists in blend file or textures LOD textures if they exist
+            if texture.name in images or self.skip_lod_tex == True and any(x in texture.name for x in lod):
+                continue
+            else:
+                print(texture.name)
+                image_from_data(texture.name, texture.width, texture.height, nut2dds(texture.nut.textures[0]))
+
+        # Set shading type to texture
+        next(space for area in bpy.context.screen.areas if area.type=='VIEW_3D' for space in area.spaces if space.type=='VIEW_3D').shading.color_type = 'TEXTURE'
 
     def read(self, context):
         self.xfbin = read_xfbin(self.filepath)
@@ -247,12 +282,11 @@ class XfbinImporter:
         # Create a blender material for each xfbin material chunk
         xfbin_material_dict = {
             name: mat
-            for name, mat in map(lambda x: (x.name, self.make_material(x)), armature_obj.xfbin_clump_data.materials)
+            for name, mat in map(lambda x: (x.name, self.make_material(x, clump.model_chunks)), armature_obj.xfbin_clump_data.materials)
         }
 
         all_model_chunks = list(dict.fromkeys(
             chain(clump.model_chunks, *map(lambda x: x.model_chunks, clump.model_groups))))
-
         for nucc_model in all_model_chunks:
             if not (isinstance(nucc_model, NuccChunkModel) and nucc_model.nud):
                 continue
@@ -347,32 +381,40 @@ class XfbinImporter:
 
                     # Apply the armature modifier
                     modifier = mesh_obj.modifiers.new(type='ARMATURE', name="Armature")
-                    modifier.object = armature_obj
+                    modifier.object = armature_obj            
 
-    def make_material(self, xfbin_mat: XfbinMaterialPropertyGroup) -> Material:
-        material: Material = bpy.data.materials.new(f'[XFBIN] {xfbin_mat.name}')
+    def make_material(self, xfbin_mat: XfbinMaterialPropertyGroup, models) -> Material:
+        material: Material = ''
+        test = {}
+        for model in models:
+            for group in model.nud.mesh_groups:
+                for mesh, mat in zip(group.meshes, model.material_chunks):
+                    test[mat.name] = int_to_hex_str(mesh.materials[0].flags, 4)
+        
+        for mat in bpy.data.materials:
+            if mat.name == f'[XFBIN] {xfbin_mat.name}':
+                name = f'[XFBIN] {xfbin_mat.name}'
+                bpy.data.materials.remove(bpy.data.materials[name])
+                print(f'Removed {xfbin_mat.name}')
 
+        if xfbin_mat.name in test and test.get(xfbin_mat.name) == '00 00 F0 0A' and xfbin_mat.name not in bpy.data.materials:
+            material = F00A(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)  
+        elif xfbin_mat.name in test and test.get(xfbin_mat.name) == '00 02 F0 0A' and xfbin_mat.name not in bpy.data.materials:
+            material = _02_F00A(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)
+        else:
+            material = bpy.data.materials.new(f'[XFBIN] {xfbin_mat.name}')
+
+
+        '''for m in models:
+            print(m.nud.mesh_groups[0].meshes[0].materials[0].textures)'''
+        
+        '''print(material.node_tree.nodes['F00A TEX'].name)
         if xfbin_mat.texture_groups and xfbin_mat.texture_groups[0].textures:
             image_name = xfbin_mat.texture_groups[0].textures[0].texture
 
-            material.use_nodes = True
-            bsdf_node = material.node_tree.nodes.get('Principled BSDF')
-
-            image_node = material.node_tree.nodes.new('ShaderNodeTexImage')
-            image_node.location = (-300, 220)
-
             # Try different name variations because blender loads external images with their extension
             for name in (image_name, f'{image_name}.dds', f'{image_name}.png'):
-                image_node.image = bpy.data.images.get(name)
-
-                if image_node.image is not None:
-                    # If the image exists, link it to the material
-                    material.node_tree.links.new(image_node.outputs['Color'], bsdf_node.inputs['Base Color'])
-                    break
-
-            # Remove the image node if we couldn't find the texture
-            if image_node.image is None:
-                material.node_tree.nodes.remove(image_node)
+                material.node_tree.nodes['F00A TEX'].image = bpy.data.images.get(image_name)'''
 
         return material
 

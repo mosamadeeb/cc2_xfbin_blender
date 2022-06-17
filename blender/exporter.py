@@ -236,12 +236,12 @@ class XfbinExporter:
             self.inject_to_clump = False
 
         #Lazy fix to apply transforms
-        bpy.ops.object.mode_set(mode='OBJECT')
+        '''bpy.ops.object.mode_set(mode='OBJECT')
         for o in bpy.data.collections[self.collection.name].all_objects:
             if o.type == 'MESH' or o.type == 'ARMATURE':
                 o.select_set(True)
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action='DESELECT')'''
 
         # Export textures
         if self.export_textures:
