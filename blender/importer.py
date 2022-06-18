@@ -384,7 +384,7 @@ class XfbinImporter:
                     modifier.object = armature_obj            
 
     def make_material(self, xfbin_mat: XfbinMaterialPropertyGroup, models) -> Material:
-        material: Material = ''
+        #Optimize this code later
         test = {}
         for model in models:
             for group in model.nud.mesh_groups:
