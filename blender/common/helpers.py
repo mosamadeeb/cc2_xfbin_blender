@@ -130,10 +130,9 @@ def F00A(self, xfbin_mat, matname, nodegrp = 'F00A'):
 	material.node_tree.nodes.remove(material.node_tree.nodes['Principled BSDF'])
 	material.node_tree.nodes.remove(material.node_tree.nodes['Material Output'])
 
-	#remove nodes with the same name to prevent issues with min and max values of some nodes
-	for node in bpy.data.node_groups:
-		if node.name == nodegrp:
-			bpy.data.node_groups.remove(node)
+	#remove node groups with the same name to prevent issues with min and max values of some nodes
+	if bpy.data.node_groups.get(nodegrp):
+		bpy.data.node_groups.remove(bpy.data.node_groups.get(nodegrp))
 
 	#Create a new node tree to be used later
 	nodetree = bpy.data.node_groups.new(nodegrp, 'ShaderNodeTree')
@@ -228,10 +227,10 @@ def _02_F00A(self, xfbin_mat, matname, nodegrp = '02F00A'):
 	material.node_tree.nodes.remove(material.node_tree.nodes['Principled BSDF'])
 	material.node_tree.nodes.remove(material.node_tree.nodes['Material Output'])
 
-	#remove nodes with the same name to prevent issues with min and max values of some nodes
-	for node in bpy.data.node_groups:
-		if node.name == nodegrp:
-			bpy.data.node_groups.remove(node)
+	#remove node groups with the same name to prevent issues with min and max values of some nodes
+	#for node in bpy.data.node_groups:
+	if bpy.data.node_groups.get(node.name):
+		bpy.data.node_groups.remove(bpy.data.node_groups.get(node.name))
 
 	#Create a new node tree to be used later
 	nodetree = bpy.data.node_groups.new(nodegrp, 'ShaderNodeTree')
