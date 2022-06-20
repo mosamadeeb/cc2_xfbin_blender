@@ -112,6 +112,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.idea/
 .idea/cc2_xfbin_blender.iml
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/misc.xml
