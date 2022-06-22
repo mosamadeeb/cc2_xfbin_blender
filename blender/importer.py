@@ -16,8 +16,9 @@ from ..xfbin_lib.xfbin.structure.nud import NudMesh
 from ..xfbin_lib.xfbin.structure.xfbin import Xfbin
 from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
-from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ, image_from_data, nut2dds,int_to_hex_str, F00A, _02_F00A
+from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ, image_from_data, nut2dds,int_to_hex_str
 from .panels.clump_panel import XfbinMaterialPropertyGroup
+from .common.shaders import F00A, _02_F00A, _05_F00D, _01_F003, _05_F002, _07_F002, E002
 
 
 class ImportXFBIN(Operator, ImportHelper):
@@ -395,59 +396,60 @@ class XfbinImporter:
             if mat.name == f'[XFBIN] {xfbin_mat.name}':
                 name = f'[XFBIN] {xfbin_mat.name}'
                 bpy.data.materials.remove(bpy.data.materials[name])
+        
+        #Shader functions
+        shaders_dict = {'00 00 F0 0A': F00A, '00 01 F0 0A': F00A, '00 02 F0 0A': _02_F00A, '00 05 F0 0D': _05_F00D,
+        '00 01 F0 0D': _05_F00D, '00 01 F0 03': _01_F003, '00 05 F0 03': _01_F003, '00 05 F0 02': _05_F002, '00 07 F0 02':_07_F002,
+        '00 00 E0 02': E002}
 
-        if xfbin_mat.name in test and test.get(xfbin_mat.name) == '00 00 F0 0x' and xfbin_mat.name not in bpy.data.materials:
-            material = F00A(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)
-        elif xfbin_mat.name in test and test.get(xfbin_mat.name) == '00 01 F0 0x' and xfbin_mat.name not in bpy.data.materials:
-            material = F00A(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)
-        elif xfbin_mat.name in test and test.get(xfbin_mat.name) == '00 02 F0 0x' and xfbin_mat.name not in bpy.data.materials:
-            material = _02_F00A(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)
+        if xfbin_mat.name in test and test.get(xfbin_mat.name) in shaders_dict and xfbin_mat.name not in bpy.data.materials:
+            material = shaders_dict.get(test.get(xfbin_mat.name))(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)
         else:
             material = bpy.data.materials.new(f'[XFBIN] {xfbin_mat.name}')
             material.use_nodes = True
             material.blend_method = 'CLIP'
-            material.shadow_method = 'NONE'
+            material.shadow_method = 'CLIP'
 
-        #remove node groups with the same name to prevent issues with min and max values of some nodes
-        if bpy.data.node_groups.get(xfbin_mat.name):
-            bpy.data.node_groups.remove(bpy.data.node_groups.get(xfbin_mat.name))
-        
+            #remove node groups with the same name to prevent issues with min and max values of some nodes
+            if bpy.data.node_groups.get(xfbin_mat.name):
+                bpy.data.node_groups.remove(bpy.data.node_groups.get(xfbin_mat.name))
+            
 
-        if xfbin_mat.texture_groups and xfbin_mat.texture_groups[0].textures:
-            #texcount = len(xfbin_mat.texture_groups[0].textures)
-            not_included = ['celshade', 'haching', 'haching1', 'haching2', 'haching_n', '1efc_pro_noise01']
-            prev_index = 0
-            for i in range(len(xfbin_mat.texture_groups[0].textures)):
-                if i == 0:
-                    globals()[f'image_name_{i}'] = xfbin_mat.texture_groups[0].textures[i].texture
-                    globals()[f'uv_{i}'] = material.node_tree.nodes.new('ShaderNodeUVMap')
-                    globals()[f'uv_{i}'].uv_map = f'UV_{i}'
-                    globals()[f'tex_{i}'] = material.node_tree.nodes.new('ShaderNodeTexImage')
-                    globals()[f'tex_{i}'].name = f'Texture_{i}'
-                    globals()[f'tex_{i}'].image = bpy.data.images.get(globals()[f'image_name_{i}'])
-                    material.node_tree.links.new(globals()[f'uv_{i}'].outputs[0], globals()[f'tex_{i}'].inputs[0])
-                    pBSDF = material.node_tree.nodes.get('Principled BSDF')
-                    material.node_tree.links.new(globals()[f'tex_{i}'].outputs[0], pBSDF.inputs['Base Color'])
-                    material.node_tree.links.new(globals()[f'tex_{i}'].outputs[1], pBSDF.inputs['Alpha'])
-                    prev_index = i
-                    print(prev_index)
-                if i > 0 and xfbin_mat.texture_groups[0].textures[i].texture_name not in not_included:
-                    globals()[f'image_name_{i}'] = xfbin_mat.texture_groups[0].textures[i].texture
-                    globals()[f'uv_{i}'] = material.node_tree.nodes.new('ShaderNodeUVMap')
-                    globals()[f'uv_{i}'].uv_map = f'UV_{i}'
-                    globals()[f'tex_{i}'] = material.node_tree.nodes.new('ShaderNodeTexImage')
-                    globals()[f'tex_{i}'].name = f'Texture_{i}'
-                    globals()[f'tex_{i}'].image = bpy.data.images.get(globals()[f'image_name_{i}'])
-                    globals()[f'mix_{i}'] = material.node_tree.nodes.new('ShaderNodeMixRGB')
-                    globals()[f'mix_{i}'].blend_type = 'MIX'
-                    globals()[f'mix_{i}'].inputs[0].default_value = 1
-                    material.node_tree.links.new(globals()[f'uv_{i}'].outputs[0], globals()[f'tex_{i}'].inputs[0])
-                    material.node_tree.links.new(globals()[f'tex_{i}'].outputs[1], globals()[f'mix_{i}'].inputs[0])
-                    material.node_tree.links.new(globals()[f'tex_{prev_index}'].outputs[0], globals()[f'mix_{i}'].inputs[1])
-                    material.node_tree.links.new(globals()[f'tex_{i}'].outputs[0], globals()[f'mix_{i}'].inputs[2])
-                    material.node_tree.links.new(globals()[f'mix_{i}'].outputs[0], pBSDF.inputs['Base Color'])
-                    prev_index += 1
-                    print(prev_index)
+            if xfbin_mat.texture_groups and xfbin_mat.texture_groups[0].textures:
+                #texcount = len(xfbin_mat.texture_groups[0].textures)
+                not_included = ['celshade', 'haching', 'haching1', 'haching2', 'haching_n', '1efc_pro_noise01']
+                prev_index = 0
+                for i in range(len(xfbin_mat.texture_groups[0].textures)):
+                    if i == 0:
+                        globals()[f'image_name_{i}'] = xfbin_mat.texture_groups[0].textures[i].texture
+                        globals()[f'uv_{i}'] = material.node_tree.nodes.new('ShaderNodeUVMap')
+                        globals()[f'uv_{i}'].uv_map = f'UV_{i}'
+                        globals()[f'tex_{i}'] = material.node_tree.nodes.new('ShaderNodeTexImage')
+                        globals()[f'tex_{i}'].name = f'Texture_{i}'
+                        globals()[f'tex_{i}'].image = bpy.data.images.get(globals()[f'image_name_{i}'])
+                        material.node_tree.links.new(globals()[f'uv_{i}'].outputs[0], globals()[f'tex_{i}'].inputs[0])
+                        pBSDF = material.node_tree.nodes.get('Principled BSDF')
+                        material.node_tree.links.new(globals()[f'tex_{i}'].outputs[0], pBSDF.inputs['Base Color'])
+                        material.node_tree.links.new(globals()[f'tex_{i}'].outputs[1], pBSDF.inputs['Alpha'])
+                        prev_index = i
+                        print(prev_index)
+                    if i > 0 and xfbin_mat.texture_groups[0].textures[i].texture_name not in not_included:
+                        globals()[f'image_name_{i}'] = xfbin_mat.texture_groups[0].textures[i].texture
+                        globals()[f'uv_{i}'] = material.node_tree.nodes.new('ShaderNodeUVMap')
+                        globals()[f'uv_{i}'].uv_map = f'UV_{i}'
+                        globals()[f'tex_{i}'] = material.node_tree.nodes.new('ShaderNodeTexImage')
+                        globals()[f'tex_{i}'].name = f'Texture_{i}'
+                        globals()[f'tex_{i}'].image = bpy.data.images.get(globals()[f'image_name_{i}'])
+                        globals()[f'mix_{i}'] = material.node_tree.nodes.new('ShaderNodeMixRGB')
+                        globals()[f'mix_{i}'].blend_type = 'MIX'
+                        globals()[f'mix_{i}'].inputs[0].default_value = 1
+                        material.node_tree.links.new(globals()[f'uv_{i}'].outputs[0], globals()[f'tex_{i}'].inputs[0])
+                        material.node_tree.links.new(globals()[f'tex_{i}'].outputs[1], globals()[f'mix_{i}'].inputs[0])
+                        material.node_tree.links.new(globals()[f'tex_{prev_index}'].outputs[0], globals()[f'mix_{i}'].inputs[1])
+                        material.node_tree.links.new(globals()[f'tex_{i}'].outputs[0], globals()[f'mix_{i}'].inputs[2])
+                        material.node_tree.links.new(globals()[f'mix_{i}'].outputs[0], pBSDF.inputs['Base Color'])
+                        prev_index += 1
+                        print(prev_index)
 
 
 
