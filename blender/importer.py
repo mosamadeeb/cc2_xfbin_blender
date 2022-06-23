@@ -18,7 +18,7 @@ from ..xfbin_lib.xfbin.xfbin_reader import read_xfbin
 from .common.coordinate_converter import *
 from .common.helpers import XFBIN_TEXTURES_OBJ, XFBIN_DYNAMICS_OBJ, image_from_data, nut2dds,int_to_hex_str
 from .panels.clump_panel import XfbinMaterialPropertyGroup
-from .common.shaders import F00A, _02_F00A, _05_F00D, _01_F003, _05_F002, _07_F002, E002
+from .common.shaders import F00A, _02_F00A, _05_F00D, _01_F003, _05_F002, _07_F002, _07_F010, _07_F00D, _01_F002, _01_F008, E002
 
 
 class ImportXFBIN(Operator, ImportHelper):
@@ -400,7 +400,8 @@ class XfbinImporter:
         #Shader functions
         shaders_dict = {'00 00 F0 0A': F00A, '00 01 F0 0A': F00A, '00 02 F0 0A': _02_F00A, '00 05 F0 0D': _05_F00D,
         '00 01 F0 0D': _05_F00D, '00 01 F0 03': _01_F003, '00 05 F0 03': _01_F003, '00 05 F0 02': _05_F002, '00 07 F0 02':_07_F002,
-        '00 00 E0 02': E002}
+        '00 00 E0 02': E002, '00 07 F0 10':_07_F010, '00 03 F0 10':_07_F010, '00 07 F0 0D':_07_F00D, '00 01 F0 02':_01_F002,
+        '00 01 F0 08':_01_F008,}
 
         if xfbin_mat.name in test and test.get(xfbin_mat.name) in shaders_dict and xfbin_mat.name not in bpy.data.materials:
             material = shaders_dict.get(test.get(xfbin_mat.name))(self, xfbin_mat, f'[XFBIN] {xfbin_mat.name}', xfbin_mat.name)
