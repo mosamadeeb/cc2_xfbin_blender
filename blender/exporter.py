@@ -802,7 +802,6 @@ class XfbinExporter:
     
     
     def make_dynamics(self, dynamics_obj: Object, context) -> NuccChunkDynamics:
-        #test make dynamics
         context.view_layer.objects.active = dynamics_obj
         dynamics_data: DynamicsPropertyGroup = dynamics_obj.xfbin_dynamics_data
         dynamics = NuccChunkDynamics(dynamics_data.path, dynamics_data.clump_name)
@@ -814,10 +813,12 @@ class XfbinExporter:
 
         dynamics.SPGroupCount = len(dynamics_data.spring_groups)
         dynamics.ColSphereCount = len(dynamics_data.collision_spheres)
+
+        #update dynamics chunk values before exporting
+        bpy.ops.object.update_dynamics()
        
         dynamics.SPGroup = list()
-        sortedSPG = sorted(dynamics_data.spring_groups, key= lambda x: x.spring_group_index)
-        for dynamic in sortedSPG: #dynamics_data.spring_groups:
+        for dynamic in sorted(dynamics_data.spring_groups, key= lambda x: x.spring_group_index): 
             dynamic: SpringGroupsPropertyGroup
             d = Dynamics1()
             
@@ -859,17 +860,9 @@ class XfbinExporter:
 
             c.attached_groups = list()
             
-            attached_groups_temp= list()
             for g in col.attached_groups:
-                attached_groups_temp.append(g.value)
-            
-            for g in attached_groups_temp:
-                for dyn in dynamics_data.spring_groups:
-                    if g == dyn.name:
-                        g = dyn.spring_group_index
-                c.attached_groups.append(g)
-            
-
+                if dynamics_data.spring_groups.get(g.value):
+                    c.attached_groups.append(dynamics_data.spring_groups.get(g.value).spring_group_index)
             
             dynamics.ColSphere.append(c)
         

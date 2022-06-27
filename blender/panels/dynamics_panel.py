@@ -1,6 +1,6 @@
 from typing import List
 
-import bpy
+import bpy, bmesh
 from bpy.props import (BoolProperty, CollectionProperty, IntProperty,
                        StringProperty, FloatProperty, EnumProperty)
 from bpy.types import Panel, PropertyGroup
@@ -8,7 +8,7 @@ from bpy.types import Panel, PropertyGroup
 from ...xfbin_lib.xfbin.structure.nucc import NuccChunkDynamics, Dynamics1, Dynamics2
 from ..common.helpers import XFBIN_DYNAMICS_OBJ
 from .common import (EmptyPropertyGroup, draw_copy_paste_ops, draw_xfbin_list,
-                     matrix_prop_group, IntPropertyGroup, StringPropertyGroup)
+                     matrix_prop_group, matrix_prop_search, IntPropertyGroup, StringPropertyGroup)
 
 
 class SpringGroupsPropertyGroup(PropertyGroup):
@@ -35,7 +35,6 @@ class SpringGroupsPropertyGroup(PropertyGroup):
 
     bone_index: IntProperty(
         name='Bone Index',
-        #update= spring_index_update
     )
 
     bone_count: IntProperty(
@@ -45,18 +44,22 @@ class SpringGroupsPropertyGroup(PropertyGroup):
 
     dyn1: FloatProperty(
         name='Bounciness',
+        default=0.6
     )
 
     dyn2: FloatProperty(
         name='Elasticity',
+        default=0.8
     )
 
     dyn3: FloatProperty(
         name='Stiffness',
+        default=0.3
     )
 
     dyn4: FloatProperty(
         name='Movement',
+        default=1
     )
     flags: CollectionProperty(
         type = IntPropertyGroup,
@@ -95,18 +98,6 @@ class CollisionSpheresPropertyGroup(PropertyGroup):
         if extra > 0:
             for _ in range(extra):
                 self.attached_groups.add()
-    
-
-    def bone_list(self, context):
-        bones = []
-
-        for obj in bpy.data.objects:
-            if obj.type == 'ARMATURE' and obj.xfbin_clump_data.path == context.object.xfbin_dynamics_data.path:
-                for b in obj.data.bones:
-                    bonename = (b.name, b.name, '')
-                    bones.append(bonename)
-        return bones
-
 
     def collision_bone_update(self, context):
         armature_obj = ''
@@ -133,19 +124,21 @@ class CollisionSpheresPropertyGroup(PropertyGroup):
 
     scale_x: FloatProperty(
         name='X Scale',
+        default= 1.0
     )
 
     scale_y: FloatProperty(
         name='Y Scale',
+        default= 1.0
     )
 
     scale_z: FloatProperty(
         name='Z Scale',
+        default= 1.0
     )
 
     bone_index: IntProperty(
     name='Bone Index',
-    #update= collision_index_update
     )
 
     attach_groups: BoolProperty(
@@ -163,19 +156,13 @@ class CollisionSpheresPropertyGroup(PropertyGroup):
         name='Attached Spring Groups',
     )
 
-    '''bone_list: EnumProperty(
-        items= bone_list,
-        name= 'Test'
-    )'''
-
     bone_collision: StringProperty(
         name= 'Bone',
         update= collision_bone_update
     )
 
-    sg_list: CollectionProperty(
-        type= StringPropertyGroup,
-    )
+    sg_enum: StringProperty(
+        name='Spring Group')
 
     def update_name(self):
         self.name = 'Collision Group'
@@ -206,9 +193,7 @@ class CollisionSpheresPropertyGroup(PropertyGroup):
             g = self.attached_groups.add()
             g.value = str(group)
         
-        for sp in bpy.context.object.xfbin_dynamics_data.spring_groups:
-            g = self.sg_list.add()
-            g.value = sp.name
+        
 
 class DynamicsPropertyGroup(PropertyGroup):
 
@@ -244,6 +229,7 @@ class DynamicsPropertyGroup(PropertyGroup):
     name: StringProperty(
     )
 
+
     def bonename(self, index, clump):
         return bpy.data.objects[f'{clump} [C]'].data.bones[index].name
 
@@ -270,6 +256,7 @@ class DynamicsPropertyGroup(PropertyGroup):
             for i, index in enumerate(sorted(indices)):
                 if index == sgroup.coord_index:
                     s.spring_group_index = i
+            
 
         
         # Add collision groups
@@ -380,13 +367,13 @@ class DynamicsPropertyPanel(Panel):
             if collision_spheres.attach_groups == True:
                 row = box.row()
                 row.prop(collision_spheres, 'attached_count')
-                row.operator(index_to_string.bl_idname)
-                matrix_prop_group(box, collision_spheres, 'attached_groups', collision_spheres.attached_count, 'Attached Spring Groups')
+                matrix_prop_search(box, collision_spheres, 'attached_groups', data, 'spring_groups', collision_spheres.attached_count, 'Attached Spring Groups')
 
 
 class update_dynamics(bpy.types.Operator):
     bl_idname = "object.update_dynamics"
-    bl_label = "Update spring and collision bones"
+    bl_label = "Update Dynamics"
+    bl_description = "Update Spring and Collision groups. You must click this button whenever you make changes"
     @classmethod
     def poll(cls, context):
         obj = context.object
@@ -401,65 +388,56 @@ class update_dynamics(bpy.types.Operator):
 
         def update(dynamics_object):
             #update spring groups
-            indices = []
-            for sp in dynamics_object.xfbin_dynamics_data.spring_groups:
-                indices.append(sp.bone_index) #add bone indices to a list to be used later
-                #check if the bone
+            for index, sp in enumerate(sorted(dynamics_object.xfbin_dynamics_data.spring_groups, key= lambda x: x.bone_index)):
+                #check if the bone exists
                 if sp.bone_spring not in armature_obj.data.bones:
                         self.report(
                         {'WARNING'}, f'Spring Group "{sp.bone_spring}" Could not be found in "{armature_obj.name}". Please remove it')
                 #update bone index, count and name
                 for i, b in enumerate(armature_obj.data.bones):
-                    if sp.bone_spring in armature_obj.data.bones and sp.bone_spring == b.name:
+                    if sp.bone_spring == b.name:
                         sp.bone_index = i
                         sp.bone_count = len(b.children_recursive) + 1
                         sp.name = f'Spring Group [{b.name}]'
-            
-            #update the index of the spring group
-            for i, index in enumerate(sorted(indices)):
-                for sp in dynamics_object.xfbin_dynamics_data.spring_groups:
-                    if sp.bone_index == index:
-                        sp.spring_group_index = i
-            
+                        sp.spring_group_index = index
+
             #update collision groups
             for index, col in enumerate(dynamics_object.xfbin_dynamics_data.collision_spheres):
                 if col.bone_collision not in armature_obj.data.bones:
                     self.report(
-                        {'WARNING'}, f'Spring Group "{col.bone_collision}" Could not be found in "{armature_obj.name}". Please remove it')
+                        {'WARNING'}, f'Collision Group "{col.bone_collision}" Could not be found in "{armature_obj.name}". Please remove it')
+                #check if the attached spring group exists in the dynamics object
+                if len(col.attached_groups) > 0:
+                    for ag in col.attached_groups:
+                        if dynamics_object.xfbin_dynamics_data.spring_groups.get(ag.value) is None:
+                            self.report(
+                                {'WARNING'}, f'Attached Group "{ag.value}" in "{col.name}" Could not be found. Please remove it')
+                #update bone index and name
                 for i, b in enumerate(armature_obj.data.bones):
                     if col.bone_collision in armature_obj.data.bones and col.bone_collision == b.name:
                         col.bone_index = i
                         col.name = f'Collision Group {index} [{b.name}]'
-        
+                #check if there's a collision object for this group then use its coordinates
+                colobj = context.view_layer.objects.get(col.name)
+                if colobj:
+                    col.offset_x = colobj.location.x * 100
+                    col.offset_y = colobj.location.y * 100
+                    col.offset_z = colobj.location.z * 100
+                    col.scale_x = colobj.scale.x
+                    col.scale_y = colobj.scale.y
+                    col.scale_z = colobj.scale.z
 
-        #try to only update one dynamics object
+
+        #try to only update the active dynamics object
         if len(dyn_objs) < 1:
             self.report({'WARNING'}, f'There is no dnyamics chunk object in this collection {bpy.context.collection.name}')
         elif context.object in dyn_objs:
-            update(bpy.context.object)
+            update(context.object)
         else:
             for dyn in dny_objs:
                 update(dyn)
         
         return {'FINISHED'}
-
-class index_to_string(bpy.types.Operator):
-    bl_idname = "object.index_to_string"
-    bl_label = "Index to String"
-    @classmethod
-    def poll(cls, context):
-        obj = context.object
-        return obj and obj.type == 'EMPTY' and obj.parent is None and obj.name.startswith(XFBIN_DYNAMICS_OBJ)
-    def execute(self, context):
-            #for col in context.object.xfbin_dynamics_data.collision_spheres:
-            cs_index = context.object.xfbin_dynamics_data.cs_index
-            if context.object.xfbin_dynamics_data.collision_spheres[cs_index].attach_groups == True and context.object.xfbin_dynamics_data.collision_spheres[cs_index].attached_count > 0:
-                for c in context.object.xfbin_dynamics_data.collision_spheres[cs_index].attached_groups:
-                    for sp in context.object.xfbin_dynamics_data.spring_groups:
-                        if c.value == str(sp.spring_group_index):
-                            c.value = sp.name
-            return {'FINISHED'}
-
 
 class MakeCollisions(bpy.types.Operator):
     bl_idname = "object.collisions"
@@ -472,7 +450,7 @@ class MakeCollisions(bpy.types.Operator):
     def execute(self, context):
         collection_name = f'{bpy.context.object.xfbin_dynamics_data.clump_name} Collision'
 
-        #Remove any collection that has the same name we're gonna use and its objects
+        #Remove any collection that has the same name and its objects
         for c in bpy.data.collections:
             if c.name.startswith(collection_name):
                 if len(c.objects) > 0:
@@ -484,35 +462,75 @@ class MakeCollisions(bpy.types.Operator):
 
         clump = bpy.context.object.xfbin_dynamics_data.clump_name + ' [C]'
 
-        #bpy.data.collections[bpy.context.object.users_collection[0].name].children.link(collection)
         bpy.context.scene.collection.children.link(collection)
 
         for col in bpy.context.object.xfbin_dynamics_data.collision_spheres:
             #Adds an empty sphere with the correct size
-            empty = bpy.data.objects.new(col.name, None)
-            empty.empty_display_size = 0.01
-            empty.empty_display_type = 'SPHERE'
+            mesh = bpy.data.meshes.new(col.name)
+            bm = bmesh.new()
+            bmesh.ops.create_icosphere(bm, subdivisions = 2, radius= 0.01)
+            bm.to_mesh(mesh)
+            bm.free()
+            sphere = bpy.data.objects.new(col.name, mesh)
             
             #Link the new object we create to the collection
-            collection.objects.link(empty)
+            collection.objects.link(sphere)
             
             #Add object constraint to attach the sphere
-            con = empty.constraints.new(type= 'CHILD_OF')
+            con = sphere.constraints.new(type= 'CHILD_OF')
             con.name = f'{col.name} Child Of {clump}'
             con.target = bpy.data.objects[clump]
             con.subtarget = bpy.data.objects[clump].data.bones[col.bone_collision].name
             
             #Don't set inverse
             con.set_inverse_pending = False
+
+            #Add wireframe modifier
+            mod = sphere.modifiers.new('Collision Wireframe', 'WIREFRAME')
+            mod.thickness =  0.0001
+            
+            #Add a material
+            matname = col.name
+            if matname in bpy.data.materials:
+                bpy.data.materials.remove(bpy.data.materials.get(matname))
+            
+            mat = bpy.data.materials.new(matname)
+            mat.use_nodes = True
+            mat.node_tree.nodes.remove(mat.node_tree.nodes['Principled BSDF'])
+            output = mat.node_tree.nodes.get('Material Output')
+            rgb = mat.node_tree.nodes.new('ShaderNodeRGB')
+            if col.attach_groups == True and col.attached_count > 0:
+                rgb.outputs[0].default_value = (0.8, 0.075, 0.7, 1)
+            else:
+                rgb.outputs[0].default_value = (0.02, 0.04, 0.8, 1)
+            mat.node_tree.links.new(rgb.outputs[0], output.inputs[0])
+            mat.shadow_method = 'NONE'
+
+            #link material
+            sphere.data.materials.append(mat)
             
             #Set the empty as the active object
             bpy.ops.object.select_all(action='DESELECT')
-            empty.select_set(True)
-            bpy.context.view_layer.objects.active = empty
+            sphere.select_set(True)
+            bpy.context.view_layer.objects.active = sphere
         
-            #use collision group info to represent the sphere, need to use a better method 
-            bpy.ops.transform.resize(value =(col.scale_z, col.scale_y, col.scale_x), orient_type='LOCAL')
-            bpy.ops.transform.translate(value= (col.offset_z * 0.01, col.offset_y * 0.01, col.offset_x * 0.01), orient_type='LOCAL')
+            #use collision group info to represent the sphere
+            sphere.scale = (col.scale_x, col.scale_y, col.scale_z)
+            sphere.location = (col.offset_x * 0.01, col.offset_y * 0.01, col.offset_z * 0.01)
+
+            #Create an empty mesh to view the local xyz axes
+            axes = bpy.data.objects.new(f'{col.name} XYZ', None)
+            axes.empty_display_type = 'ARROWS'
+            axes.empty_display_size = 0.01
+            collection.objects.link(axes)
+            
+            #add constraints
+            con2 = axes.constraints.new(type= 'CHILD_OF')
+            con2.name = f'Child Of {axes.name}'
+            con2.target = bpy.data.objects[sphere.name]
+            #Don't set inverse
+            con2.set_inverse_pending = False
+
             
             
         return {'FINISHED'}
@@ -533,12 +551,12 @@ class UpdateCollision(bpy.types.Operator):
         if colgroup[cs_index]:
             obj = context.view_layer.objects.get(colgroup[cs_index].name)
             if obj:
-                colgroup[cs_index].offset_z = obj.location[0] * 100
+                colgroup[cs_index].offset_x = obj.location[0] * 100
                 colgroup[cs_index].offset_y = obj.location[1] * 100
-                colgroup[cs_index].offset_x = obj.location[2] * 100
-                colgroup[cs_index].scale_z = obj.scale[0]
+                colgroup[cs_index].offset_z = obj.location[2] * 100
+                colgroup[cs_index].scale_x = obj.scale[0]
                 colgroup[cs_index].scale_y = obj.scale[1]
-                colgroup[cs_index].scale_x = obj.scale[2]
+                colgroup[cs_index].scale_z = obj.scale[2]
             else:
                 self.report({"WARNING"}, 'Collision object was not found, use (Make Collisions) button to create it')
 
@@ -554,7 +572,6 @@ dynamics_chunks_classes = (
     *dynamics_chunks_property_groups,
     DynamicsPropertyPanel,
     update_dynamics,
-    index_to_string,
     MakeCollisions,
     UpdateCollision
 )

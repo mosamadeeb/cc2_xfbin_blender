@@ -48,6 +48,18 @@ def matrix_prop_group(ui_layout: UILayout, data, prop_name: str, length: int, te
     for i in range((length // 4) * 4, (length // 4) * 4 + (length % 4)):
         box.prop(collection[i], 'value', text='')
 
+def matrix_prop_search(ui_layout: UILayout, data, prop_name: str, search_data: 'AnyType', search_property: str, length: int, text=''):
+    
+    collection = data.path_resolve(prop_name)
+    ui_layout.label(text=text)
+    box = ui_layout.box().grid_flow(row_major=True, columns=4, even_rows=True, even_columns=True)
+    for i in range(length//4):
+        for j in range(i*4, (i+1)*4):
+            box.prop_search(collection[j], 'value', search_data, search_property, text='')
+
+    for i in range((length // 4) * 4, (length // 4) * 4 + (length % 4)):
+        box.prop_search(collection[i], 'value', search_data, search_property, text='')
+
 class StringPropertyGroup(PropertyGroup):
     value: StringProperty()
 
